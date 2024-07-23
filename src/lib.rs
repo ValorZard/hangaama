@@ -1,4 +1,4 @@
-use image::GenericImageView;
+mod texture;
 use winit::{
     event::*,
     event_loop::EventLoop,
@@ -74,6 +74,7 @@ struct State<'a> {
     index_buffer: wgpu::Buffer,
     num_indices: u32,
     diffuse_bind_group: wgpu::BindGroup,
+    diffuse_texture: texture::Texture,
     // window must be declared after surface so it gets dropped after it
     // surface contains unsafe references to window's references
     window: &'a Window,
@@ -95,14 +96,6 @@ impl<'a> State<'a> {
 
         // part of the window we actually draw to
         let surface = instance.create_surface(window).unwrap();
-
-        // grab image from file
-        let diffuse_bytes = include_bytes!("happy-tree.png");
-        let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
-        let diffuse_rgba = diffuse_image.to_rgba8();
-
-        use image::GenericImageView;
-        let dimensions = diffuse_image.dimensions();
 
         // handle for our actual graphics card
         let adapter = instance
@@ -264,71 +257,9 @@ impl<'a> State<'a> {
         });
         let num_indices = INDICES.len() as u32;
 
-        // creating the texture
-        let texture_size = wgpu::Extent3d {
-            width: dimensions.0,
-            height: dimensions.1,
-            depth_or_array_layers: 1,
-        };
-
-        let diffuse_texture = device.create_texture(&wgpu::TextureDescriptor {
-            // all textures are stored as 3D
-            // we represent our 2D texture by setting depth to 1
-            size: texture_size,
-            mip_level_count: 1, // gonna come back to this later
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            // Most images are stored using sRGB, so we need to reflect that here
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            // TEXTURE_BINDING tells wgpu that we want to use this texture in shaders
-            // COPY_DST means that we want to copy data to this texture
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            label: Some("diffuse_texture"),
-            // specifies what texture formats can be used to create TextureViews for this texture
-            // base texture format (Rgba8UnormSrgb) is supported
-            // using a different texture format is not supported on the WebGL2 backend
-            view_formats: &[],
-        });
-
-        queue.write_texture(
-            // tells wgpu where to copy the pixel data
-            wgpu::ImageCopyTexture {
-                texture: &diffuse_texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            // actual pixel data
-            &diffuse_rgba,
-            // the layout of the texture
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * dimensions.0),
-                rows_per_image: Some(dimensions.1),
-            },
-            texture_size,
-        );
-
-        // we don't need to configure the texture view much,
-        // so let's let wgpu define it
-        let diffuse_texture_view =
-            diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        
-        let diffuse_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            // any texture coordinates outside the texture will return the color of the nearest pixel on the edges of the texture
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            // what to do when the sample footprint is smaller than one texel
-            // select two texels in each dimension and return a linear interpolation between their values
-            mag_filter: wgpu::FilterMode::Linear,
-            // what to do when the sample footprint is bigger than one texel
-            // return the texel value nearest to the texture coordinates
-            min_filter: wgpu::FilterMode::Nearest,
-            // complex topic
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        });
+        // grab image from file
+        let diffuse_bytes = include_bytes!("happy-tree.png");
+        let diffuse_texture = texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "happy-tree.png").unwrap();
 
         let diffuse_bind_group = device.create_bind_group(
             &wgpu::BindGroupDescriptor {
@@ -336,11 +267,11 @@ impl<'a> State<'a> {
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&diffuse_texture_view),
+                        resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
+                        resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
                     }
                 ],
                 label: Some("diffuse_bind_group"),
@@ -360,6 +291,7 @@ impl<'a> State<'a> {
             index_buffer,
             num_indices,
             diffuse_bind_group,
+            diffuse_texture,
         }
     }
 
