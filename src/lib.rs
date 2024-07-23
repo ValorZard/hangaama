@@ -6,8 +6,24 @@ use winit::{
     window::Window,
 };
 
+// need to import this to use create_buffer_init
+use wgpu::util::DeviceExt;
+
 #[cfg(target_arch="wasm32")]
 use wasm_bindgen::prelude::*;
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct Vertex {
+    position: [f32; 3],
+    color: [f32; 3],
+}
+
+const VERTICES: &[Vertex] = &[
+    Vertex {position:[0.0, 0.5, 0.0], color: [1.0, 0.0, 0.0]},
+    Vertex {position:[-0.5, -0.5, 0.0], color: [0.0, 1.0, 0.0]},
+    Vertex {position:[0.0, -0.5, 0.0], color: [0.0, 0.0, 1.0]},
+];
 
 struct State<'a> {
     surface: wgpu::Surface<'a>,
@@ -16,6 +32,7 @@ struct State<'a> {
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
     render_pipeline: wgpu::RenderPipeline,
+    vertex_buffer: wgpu::Buffer,
     // window must be declared after surface so it gets dropped after it
     // surface contains unsafe references to window's references
     window: &'a Window,
@@ -149,6 +166,14 @@ impl<'a> State<'a> {
              cache: None,
             });
 
+        let vertex_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: bytemuck::cast_slice(VERTICES),
+                usage: wgpu::BufferUsages::VERTEX,
+            }
+        );
+
         Self {
             window,
             surface,
@@ -157,6 +182,7 @@ impl<'a> State<'a> {
             config,
             size,
             render_pipeline,
+            vertex_buffer,
         }
 
     }
