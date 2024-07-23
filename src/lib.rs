@@ -60,6 +60,7 @@ struct State<'a> {
     size: winit::dpi::PhysicalSize<u32>,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
+    num_vertices: u32,
     // window must be declared after surface so it gets dropped after it
     // surface contains unsafe references to window's references
     window: &'a Window,
@@ -203,6 +204,8 @@ impl<'a> State<'a> {
             }
         );
 
+        let num_vertices = VERTICES.len() as u32;
+
         Self {
             window,
             surface,
@@ -212,6 +215,7 @@ impl<'a> State<'a> {
             size,
             render_pipeline,
             vertex_buffer,
+            num_vertices,
         }
 
     }
@@ -283,7 +287,7 @@ impl<'a> State<'a> {
             render_pass.set_pipeline(&self.render_pipeline);
             // have to set vertex buffer in render method, else everything will crash
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.draw(0..3, 0..1);
+            render_pass.draw(0..self.num_vertices, 0..1);
         }
 
         // submit will accept anything that implements IntoIter
