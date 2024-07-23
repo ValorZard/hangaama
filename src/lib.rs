@@ -119,7 +119,52 @@ impl<'a> State<'a> {
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        todo!()
+        // wait for surface to provide SurfaceTexture
+        let output = self.surface.get_current_texture()?;
+        // use this to control how render code interacts with the texture
+        let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        // create CommandEncoder to create actual commands to send to GPU
+        // commands have to be stored in a command buffer to send to GPU
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Render Encoder"),
+        });
+
+        // clearing the screen using a RenderPass
+        // put this inside a block so that we can tell rust to drop all variables inside of it
+        // because of borrow checker shenanigans
+        // we could have also done drop(render_pass)
+        {
+            let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                // this is where we will be drawing our color to
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    // render to screen
+                    view: &view,
+                    // only important for multisampling
+                    resolve_target: None,
+                    // tells wgpu what to do with the colors on screen
+                    ops: wgpu::Operations {
+                        // color we're setting the screen to
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.2,
+                            b: 0.3,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    }
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+        }
+
+        // submit will accept anything that implements IntoIter
+        self.queue.submit(std::iter::once(encoder.finish()));
+        output.present();
+
+        Ok(())
     }
 }
 
@@ -159,34 +204,68 @@ pub async fn run() {
 }
 
     let mut state = State::new(&window).await;
+    let mut surface_configured = false;
 
-    event_loop.run(move |event, control_flow| {
-        match event {
-            Event::WindowEvent {
-                ref event,
-                window_id,
-            } if window_id == state.window().id() => if !state.input(event) { // UPDATED!
-                match event {
-                    WindowEvent::CloseRequested
-                    | WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                state: ElementState::Pressed,
-                                physical_key: PhysicalKey::Code(KeyCode::Escape),
+    event_loop
+        .run(move |event, control_flow| {
+            match event {
+                Event::WindowEvent {
+                    ref event,
+                    window_id,
+                } if window_id == state.window().id() => {
+                    if !state.input(event) {
+                        // UPDATED!
+                        match event {
+                            WindowEvent::CloseRequested
+                            | WindowEvent::KeyboardInput {
+                                event:
+                                    KeyEvent {
+                                        state: ElementState::Pressed,
+                                        physical_key: PhysicalKey::Code(KeyCode::Escape),
+                                        ..
+                                    },
                                 ..
-                            },
-                        ..
-                    } => control_flow.exit(),
-                    WindowEvent::Resized(physical_size) => {
-                        state.resize(*physical_size);
-                    }
-                    _ => {}
-                }
-            }
-            _ => {}
-        }
-    });
+                            } => control_flow.exit(),
+                            WindowEvent::Resized(physical_size) => {
+                                log::info!("physical_size: {physical_size:?}");
+                                surface_configured = true;
+                                state.resize(*physical_size);
+                            }
+                            WindowEvent::RedrawRequested => {
+                                // This tells winit that we want another frame after this one
+                                state.window().request_redraw();
 
+                                if !surface_configured {
+                                    return;
+                                }
+
+                                state.update();
+                                match state.render() {
+                                    Ok(_) => {}
+                                    // Reconfigure the surface if it's lost or outdated
+                                    Err(
+                                        wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated,
+                                    ) => state.resize(state.size),
+                                    // The system is out of memory, we should probably quit
+                                    Err(wgpu::SurfaceError::OutOfMemory) => {
+                                        log::error!("OutOfMemory");
+                                        control_flow.exit();
+                                    }
+
+                                    // This happens when the a frame takes too long to present
+                                    Err(wgpu::SurfaceError::Timeout) => {
+                                        log::warn!("Surface timeout")
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            }
+        })
+        .unwrap();
     
 }
 
