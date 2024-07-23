@@ -19,6 +19,33 @@ struct Vertex {
     color: [f32; 3],
 }
 
+impl Vertex {
+    fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            // how wide a vertex is (sahder will skip this amount of bytes)
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            // each element of the array in this buffer represents per-vertex data (for now)
+            step_mode: wgpu::VertexStepMode::Vertex,
+            // describe individual parts of the vertex
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0, // offset is in bytes, first attribute is usually zero
+                    // corresponds with @location in the shader file
+                    shader_location: 0,
+                    // shape of the attribute (max size is Float32x4)
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    // later offsets of attributes is the sum over size_of previous attributes data
+                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+            ]
+        }
+    }
+}
+
 const VERTICES: &[Vertex] = &[
     Vertex {position:[0.0, 0.5, 0.0], color: [1.0, 0.0, 0.0]},
     Vertex {position:[-0.5, -0.5, 0.0], color: [0.0, 1.0, 0.0]},
@@ -121,7 +148,9 @@ impl<'a> State<'a> {
                 module: &shader, 
                 entry_point: "vs_main", 
                 // specify what type of vertices we want to pass to the vertex shader
-                buffers: &[],
+                buffers: &[
+                    Vertex::desc(),
+                ],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             // technically optional, stores the color we want
@@ -252,8 +281,8 @@ impl<'a> State<'a> {
             
             // set pipeline using the one we created
             render_pass.set_pipeline(&self.render_pipeline);
-            // draw SOMETHING with three vertices and one instance
-            // (this is where @builtin(vertex_index) comes in)
+            // have to set vertex buffer in render method, else everything will crash
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.draw(0..3, 0..1);
         }
 
