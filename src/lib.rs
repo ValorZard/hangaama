@@ -15,6 +15,7 @@ struct State<'a> {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
+    render_pipeline: wgpu::RenderPipeline,
     // window must be declared after surface so it gets dropped after it
     // surface contains unsafe references to window's references
     window: &'a Window,
@@ -85,6 +86,69 @@ impl<'a> State<'a> {
             desired_maximum_frame_latency: 2,
         };
 
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+        });
+
+        let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Render Pipeline Layout"),
+            bind_group_layouts: &[],
+            push_constant_ranges: &[],
+        });
+
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor { 
+            label: Some("Render Pipeline"), 
+            layout: Some(&render_pipeline_layout), 
+            vertex: wgpu::VertexState { 
+                module: &shader, 
+                entry_point: "vs_main", 
+                // specify what type of vertices we want to pass to the vertex shader
+                buffers: &[],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            // technically optional, stores the color we want
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_main",
+                // what color outputs wgpu should set up
+                // currently: only need one for the surface
+                // will come back to when we start doing textures
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+             primitive: wgpu::PrimitiveState {
+                // ever three vertices will correspond to one triangle
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                // Ccw means a triangle is facing forward if vertices are arranged counter-clockwise
+                front_face: wgpu::FrontFace::Ccw,
+                // Triangle that are not facing forward get culled (CullMode::Back)
+                cull_mode: Some(wgpu::Face::Back),
+                // kinda HAS to be fill
+                polygon_mode: wgpu::PolygonMode::Fill,
+                // both also require features we dont have
+                unclipped_depth: false,
+                conservative: false
+             }, 
+             // we are not CURRENTLY using a depth/stencil buffer
+             depth_stencil: None, 
+             multisample: wgpu::MultisampleState {
+                count: 1, // how many samples the pipeline will use
+                mask: !0, // we want to use all samples
+                alpha_to_coverage_enabled: false, // anti-aliasing
+             }, 
+             // how many array layers render attachments have
+             // we aren't using that, so set to none
+             multiview: None, 
+             // cache shader compilation data (apparently for Android)
+             cache: None,
+            });
+
         Self {
             window,
             surface,
@@ -92,6 +156,7 @@ impl<'a> State<'a> {
             queue,
             config,
             size,
+            render_pipeline,
         }
 
     }
@@ -134,7 +199,7 @@ impl<'a> State<'a> {
         // because of borrow checker shenanigans
         // we could have also done drop(render_pass)
         {
-            let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 // this is where we will be drawing our color to
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -158,6 +223,12 @@ impl<'a> State<'a> {
                 occlusion_query_set: None,
                 timestamp_writes: None,
             });
+            
+            // set pipeline using the one we created
+            render_pass.set_pipeline(&self.render_pipeline);
+            // draw SOMETHING with three vertices and one instance
+            // (this is where @builtin(vertex_index) comes in)
+            render_pass.draw(0..3, 0..1);
         }
 
         // submit will accept anything that implements IntoIter
