@@ -1,4 +1,5 @@
-mod texture;
+mod sprite;
+use crate::sprite::*;
 mod camera;
 use camera::*;
 use winit::{
