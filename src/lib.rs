@@ -62,6 +62,37 @@ const VERTICES: &[Vertex] = &[
 // we can reuse vertices to create the triangles
 const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
 
+// have to convert the cgmath stuff (which is in OPENGL) to WGPU coordinates
+#[rustfmt::skip]
+pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
+    1.0, 0.0, 0.0, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 0.5, 0.5,
+    0.0, 0.0, 0.0, 1.0,
+);
+
+
+struct Camera {
+    eye: cgmath::Point3<f32>,
+    target: cgmath::Point3<f32>,
+    up: cgmath::Vector3<f32>,
+    aspect: f32,
+    fovy: f32,
+    znear: f32,
+    zfar: f32,
+}
+
+impl Camera {
+    fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
+        // view matrix -> moves the world to be at the position and rotation of the camera
+        // (to render shit)
+        let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
+        // warps scene to give effect of depth
+        let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);
+        return OPENGL_TO_WGPU_MATRIX * proj * view;
+    }
+}
+
 struct State<'a> {
     surface: wgpu::Surface<'a>,
     device: wgpu::Device,
@@ -79,6 +110,7 @@ struct State<'a> {
     cartoon_bind_group: wgpu::BindGroup,
     // input shit
     is_space_pressed: bool,
+    camera: Camera,
     // window must be declared after surface so it gets dropped after it
     // surface contains unsafe references to window's references
     window: &'a Window,
@@ -305,6 +337,20 @@ impl<'a> State<'a> {
         });
         let num_indices = INDICES.len() as u32;
 
+        let camera = Camera {
+            // position the camera 1 unit up and 2 units back
+            // +z is out of the screen
+            eye: (0.0, 1.0, 2.0).into(),
+            // have it look at the origin
+            target: (0.0, 0.0, 0.0).into(),
+            // which way is "up"
+            up: cgmath::Vector3::unit_y(),
+            aspect: config.width as f32 / config.height as f32,
+            fovy: 45.0,
+            znear: 0.1,
+            zfar: 100.0,
+        };
+
         Self {
             window,
             surface,
@@ -322,6 +368,7 @@ impl<'a> State<'a> {
             cartoon_texture,
             cartoon_bind_group,
             is_space_pressed: false,
+            camera,
         }
     }
 
