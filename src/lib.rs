@@ -122,6 +122,7 @@ struct CameraController {
     is_backward_pressed: bool,
     is_left_pressed: bool,
     is_right_pressed: bool,
+    is_space_pressed: bool,
 }
 
 impl CameraController {
@@ -132,6 +133,7 @@ impl CameraController {
             is_backward_pressed: false,
             is_left_pressed: false,
             is_right_pressed: false,
+            is_space_pressed: false,
         }
     }
 
@@ -161,6 +163,10 @@ impl CameraController {
                     }
                     KeyCode::KeyD | KeyCode::ArrowRight => {
                         self.is_right_pressed = is_pressed;
+                        true
+                    }
+                    KeyCode::Space => {
+                        self.is_space_pressed = is_pressed;
                         true
                     }
                     _ => false,
@@ -553,23 +559,6 @@ impl<'a> State<'a> {
 
     fn input(&mut self, event: &WindowEvent) -> bool {
         self.camera_controller.process_events(event)
-        /*
-        match event {
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        state,
-                        physical_key: PhysicalKey::Code(KeyCode::Space),
-                        ..
-                    },
-                ..
-            } => {
-                self.is_space_pressed = *state == ElementState::Pressed;
-                true
-            }
-            _ => false,
-        }
-        */
     }
 
     fn update(&mut self) {
@@ -628,7 +617,7 @@ impl<'a> State<'a> {
             });
 
             // switch texture on press
-            let bind_group = if self.is_space_pressed {
+            let bind_group = if self.camera_controller.is_space_pressed {
                 &self.cartoon_bind_group
             } else {
                 &self.diffuse_bind_group
