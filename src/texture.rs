@@ -1,5 +1,5 @@
-use image::GenericImageView;
 use anyhow::*;
+use image::GenericImageView;
 
 pub struct Texture {
     #[allow(unused)]
@@ -9,7 +9,7 @@ pub struct Texture {
 }
 
 impl Texture {
-    pub fn from_bytes (
+    pub fn from_bytes(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         bytes: &[u8],
@@ -23,7 +23,7 @@ impl Texture {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         img: &image::DynamicImage,
-        label: Option<&str>
+        label: Option<&str>,
     ) -> Result<Self> {
         let rgba = img.to_rgba8();
         let dimensions = img.dimensions();
@@ -34,18 +34,16 @@ impl Texture {
             depth_or_array_layers: 1,
         };
 
-        let texture = device.create_texture(
-            &wgpu::TextureDescriptor {
-                label,
-                size,
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[],
-            }
-        );
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label,
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
 
         queue.write_texture(
             wgpu::ImageCopyTexture {
@@ -53,35 +51,37 @@ impl Texture {
                 texture: &texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
-            }, 
-            &rgba, 
+            },
+            &rgba,
             wgpu::ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * dimensions.0),
                 rows_per_image: Some(dimensions.1),
-            }, 
+            },
             size,
         );
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let sampler = device.create_sampler(
-            &wgpu::SamplerDescriptor {
-                // any texture coordinates outside the texture will return the color of the nearest pixel on the edges of the texture
-                address_mode_u: wgpu::AddressMode::ClampToEdge,
-                address_mode_v: wgpu::AddressMode::ClampToEdge,
-                address_mode_w: wgpu::AddressMode::ClampToEdge,
-                // what to do when the sample footprint is smaller than one texel
-                // select two texels in each dimension and return a linear interpolation between their values
-                mag_filter: wgpu::FilterMode::Linear,
-                // what to do when the sample footprint is bigger than one texel
-                // return the texel value nearest to the texture coordinates
-                min_filter: wgpu::FilterMode::Nearest,
-                // complex topic
-                mipmap_filter: wgpu::FilterMode::Nearest,
-                ..Default::default()
-            }
-        );
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            // any texture coordinates outside the texture will return the color of the nearest pixel on the edges of the texture
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            // what to do when the sample footprint is smaller than one texel
+            // select two texels in each dimension and return a linear interpolation between their values
+            mag_filter: wgpu::FilterMode::Linear,
+            // what to do when the sample footprint is bigger than one texel
+            // return the texel value nearest to the texture coordinates
+            min_filter: wgpu::FilterMode::Nearest,
+            // complex topic
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
 
-        Ok(Self {texture, view, sampler})
+        Ok(Self {
+            texture,
+            view,
+            sampler,
+        })
     }
 }
