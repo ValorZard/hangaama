@@ -155,8 +155,7 @@ struct State<'a> {
     num_vertices: u32,
     index_buffer: wgpu::Buffer,
     num_indices: u32,
-    diffuse_texture: texture::Texture,
-    diffuse_bind_group: wgpu::BindGroup,
+    tree_sprite: Sprite,
     cartoon_texture: texture::Texture,
     cartoon_bind_group: wgpu::BindGroup,
     // input shit
@@ -275,24 +274,7 @@ impl<'a> State<'a> {
         // we should refactor this at some point
 
         // grab image from file
-        let diffuse_bytes = include_bytes!("happy-tree.png");
-        let diffuse_texture =
-            texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "happy-tree.png").unwrap();
-
-        let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-                },
-            ],
-            label: Some("diffuse_bind_group"),
-        });
+        let tree_sprite = Sprite::new("happy-tree.png", &device, &queue, &texture_bind_group_layout);
 
         // get second cartoon texture
         let cartoon_bytes = include_bytes!("happy-tree-cartoon.png");
@@ -491,8 +473,7 @@ impl<'a> State<'a> {
             num_vertices,
             index_buffer,
             num_indices,
-            diffuse_bind_group,
-            diffuse_texture,
+            tree_sprite,
             cartoon_texture,
             cartoon_bind_group,
             is_space_pressed: false,
@@ -586,7 +567,7 @@ impl<'a> State<'a> {
             let bind_group = if self.camera_controller.is_space_pressed {
                 &self.cartoon_bind_group
             } else {
-                &self.diffuse_bind_group
+                &self.tree_sprite.bind_group
             };
 
             // set pipeline using the one we created
