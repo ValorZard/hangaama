@@ -73,8 +73,12 @@ struct State<'a> {
     num_vertices: u32,
     index_buffer: wgpu::Buffer,
     num_indices: u32,
-    diffuse_bind_group: wgpu::BindGroup,
     diffuse_texture: texture::Texture,
+    diffuse_bind_group: wgpu::BindGroup,
+    cartoon_texture: texture::Texture,
+    cartoon_bind_group: wgpu::BindGroup,
+    // input shit
+    is_space_pressed: bool,
     // window must be declared after surface so it gets dropped after it
     // surface contains unsafe references to window's references
     window: &'a Window,
@@ -102,7 +106,7 @@ impl<'a> State<'a> {
             .request_adapter(&wgpu::RequestAdapterOptions {
                 // how much power/battery life we will take up
                 power_preference: wgpu::PowerPreference::default(),
-                // find an adapter that can present to suppiled surface
+                // find an adapter that can present to supplied surface
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
             })
@@ -179,6 +183,8 @@ impl<'a> State<'a> {
                 label: Some("texture_bind_group_layout"),
             });
         
+        // we should refactor this at some point
+        
         // grab image from file
         let diffuse_bytes = include_bytes!("happy-tree.png");
         let diffuse_texture = texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "happy-tree.png").unwrap();
@@ -197,6 +203,27 @@ impl<'a> State<'a> {
                     }
                 ],
                 label: Some("diffuse_bind_group"),
+            }
+        );
+
+        // get second cartoon texture
+        let cartoon_bytes = include_bytes!("happy-tree-cartoon.png");
+        let cartoon_texture = texture::Texture::from_bytes(&device, &queue, cartoon_bytes, "happy-tree-cartoon.png").unwrap();
+
+        let cartoon_bind_group = device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                layout: &texture_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&cartoon_texture.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&cartoon_texture.sampler),
+                    }
+                ],
+                label: Some("cartoon_bind_group"),
             }
         );
 
@@ -246,7 +273,7 @@ impl<'a> State<'a> {
                 cull_mode: Some(wgpu::Face::Back),
                 // kinda HAS to be fill
                 polygon_mode: wgpu::PolygonMode::Fill,
-                // both also require features we dont have
+                // both also require features we don't have
                 unclipped_depth: false,
                 conservative: false,
             },
@@ -292,6 +319,9 @@ impl<'a> State<'a> {
             num_indices,
             diffuse_bind_group,
             diffuse_texture,
+            cartoon_texture,
+            cartoon_bind_group,
+            is_space_pressed: false,
         }
     }
 
@@ -309,8 +339,21 @@ impl<'a> State<'a> {
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
-        // dont have any inputs we want to capture (FOR NOW)
-        false
+        match event {
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        state,
+                        physical_key: PhysicalKey::Code(KeyCode::Space),
+                        ..
+                    },
+                ..
+            } => {
+                self.is_space_pressed = *state == ElementState::Pressed;
+                true
+            }
+            _ => false,
+        }
     }
 
     fn update(&mut self) {
@@ -362,10 +405,17 @@ impl<'a> State<'a> {
                 timestamp_writes: None,
             });
 
+            // switch texture on press
+            let bind_group = if self.is_space_pressed {
+                &self.cartoon_bind_group
+            } else {
+                &self.diffuse_bind_group
+            };
+
             // set pipeline using the one we created
             render_pass.set_pipeline(&self.render_pipeline);
             // use our BindGroup
-            render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
+            render_pass.set_bind_group(0, bind_group, &[]);
             // have to set vertex buffer in render method, else everything will crash
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             // we can have only one index buffer at a time
@@ -420,63 +470,60 @@ pub async fn run() {
     let mut surface_configured = false;
 
     event_loop
-        .run(move |event, control_flow| {
-            match event {
-                Event::WindowEvent {
-                    ref event,
-                    window_id,
-                } if window_id == state.window().id() => {
-                    if !state.input(event) {
-                        // UPDATED!
-                        match event {
-                            WindowEvent::CloseRequested
-                            | WindowEvent::KeyboardInput {
-                                event:
-                                    KeyEvent {
-                                        state: ElementState::Pressed,
-                                        physical_key: PhysicalKey::Code(KeyCode::Escape),
-                                        ..
-                                    },
-                                ..
-                            } => control_flow.exit(),
-                            WindowEvent::Resized(physical_size) => {
-                                log::info!("physical_size: {physical_size:?}");
-                                surface_configured = true;
-                                state.resize(*physical_size);
-                            }
-                            WindowEvent::RedrawRequested => {
-                                // This tells winit that we want another frame after this one
-                                state.window().request_redraw();
-
-                                if !surface_configured {
-                                    return;
-                                }
-
-                                state.update();
-                                match state.render() {
-                                    Ok(_) => {}
-                                    // Reconfigure the surface if it's lost or outdated
-                                    Err(
-                                        wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated,
-                                    ) => state.resize(state.size),
-                                    // The system is out of memory, we should probably quit
-                                    Err(wgpu::SurfaceError::OutOfMemory) => {
-                                        log::error!("OutOfMemory");
-                                        control_flow.exit();
-                                    }
-
-                                    // This happens when the a frame takes too long to present
-                                    Err(wgpu::SurfaceError::Timeout) => {
-                                        log::warn!("Surface timeout")
-                                    }
-                                }
-                            }
-                            _ => {}
+    .run(move |event, control_flow| {
+        match event {
+            Event::WindowEvent {
+                ref event,
+                window_id,
+            } if window_id == state.window().id() => {
+                if !state.input(event) {
+                    match event {
+                        WindowEvent::CloseRequested
+                        | WindowEvent::KeyboardInput {
+                            event:
+                                KeyEvent {
+                                    state: ElementState::Pressed,
+                                    physical_key: PhysicalKey::Code(KeyCode::Escape),
+                                    ..
+                                },
+                            ..
+                        } => control_flow.exit(),
+                        WindowEvent::Resized(physical_size) => {
+                            surface_configured = true;
+                            state.resize(*physical_size);
                         }
+                        WindowEvent::RedrawRequested => {
+                            // This tells winit that we want another frame after this one
+                            state.window().request_redraw();
+
+                            if !surface_configured {
+                                return;
+                            }
+
+                            state.update();
+                            match state.render() {
+                                Ok(_) => {}
+                                // Reconfigure the surface if it's lost or outdated
+                                Err(
+                                    wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated,
+                                ) => state.resize(state.size),
+                                // The system is out of memory, we should probably quit
+                                Err(wgpu::SurfaceError::OutOfMemory) => {
+                                    log::error!("OutOfMemory");
+                                    control_flow.exit();
+                                }
+                                // This happens when the a frame takes too long to present
+                                Err(wgpu::SurfaceError::Timeout) => {
+                                    log::warn!("Surface timeout")
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
-                _ => {}
             }
-        })
-        .unwrap();
+            _ => {}
+        }
+    })
+    .unwrap();
 }
