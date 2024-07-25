@@ -147,7 +147,6 @@ const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
 struct RenderBlock {
     sprite: Sprite,
     instances: Vec<Instance>,
-    instance_buffer: wgpu::Buffer,
 }
 
 impl RenderBlock {
@@ -184,18 +183,45 @@ impl RenderBlock {
             })
             .collect::<Vec<_>>();
 
-        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
-        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Instance Buffer"),
-            contents: bytemuck::cast_slice(&instance_data),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
         Self {
             sprite,
             instances,
-            instance_buffer,
         }
+    }
+
+    fn add_instance(&mut self, x: f32, y: f32){
+        let position = cgmath::Vector3 {
+            x: x,
+            y: y,
+            z: 0.0,
+        };
+
+        let rotation = if position.is_zero() {
+            // this is needed so an object at (0, 0, 0) won't get scaled to zero
+            // as Quaternions can affect scale if they're not created correctly
+            cgmath::Quaternion::from_axis_angle(
+                cgmath::Vector3::unit_z(),
+                cgmath::Deg(0.0),
+            )
+        } else {
+            cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
+        };
+
+        let instance = Instance { position, rotation };
+
+        &self.instances.push(instance);
+    }
+
+    fn get_instance_buffer(&self, device: &wgpu::Device) -> wgpu::Buffer
+    {
+        // refresh these bits
+        let instance_data = &self.instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance Buffer"),
+            contents: bytemuck::cast_slice(instance_data),
+            usage: wgpu::BufferUsages::VERTEX,
+        })
     }
 }
 
@@ -218,8 +244,6 @@ struct State<'a> {
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     camera_controller: CameraController,
-    instances: Vec<Instance>,
-    instance_buffer: wgpu::Buffer,
     // window must be declared after surface so it gets dropped after it
     // surface contains unsafe references to window's references
     window: &'a Window,
@@ -341,39 +365,6 @@ impl<'a> State<'a> {
             &queue,
             &texture_bind_group_layout,
         );
-
-        // loop through and make a square of texture instances
-        let instances = (0..NUM_INSTANCES_PER_ROW)
-            .flat_map(|z| {
-                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                    let position = cgmath::Vector3 {
-                        x: x as f32,
-                        y: 0.0,
-                        z: z as f32,
-                    } - INSTANCE_DISPLACEMENT;
-
-                    let rotation = if position.is_zero() {
-                        // this is needed so an object at (0, 0, 0) won't get scaled to zero
-                        // as Quaternions can affect scale if they're not created correctly
-                        cgmath::Quaternion::from_axis_angle(
-                            cgmath::Vector3::unit_z(),
-                            cgmath::Deg(0.0),
-                        )
-                    } else {
-                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
-                    };
-
-                    Instance { position, rotation }
-                })
-            })
-            .collect::<Vec<_>>();
-
-        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
-        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Instance Buffer"),
-            contents: bytemuck::cast_slice(&instance_data),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -524,8 +515,6 @@ impl<'a> State<'a> {
             camera_buffer,
             camera_bind_group,
             camera_controller,
-            instances,
-            instance_buffer,
         }
     }
 
@@ -626,7 +615,7 @@ impl<'a> State<'a> {
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
             // have to set vertex buffer in render method, else everything will crash
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+            render_pass.set_vertex_buffer(1, self.tree_render_object.get_instance_buffer(&self.device).slice(..));
             // we can have only one index buffer at a time
             render_pass.set_index_buffer(
                 self.index_buffer.slice(..),
