@@ -148,6 +148,7 @@ struct RenderBlock {
     sprite: Sprite,
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
+    texture_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl RenderBlock {
@@ -155,9 +156,34 @@ impl RenderBlock {
         image_path: &str,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        texture_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
-        let sprite = Sprite::new(image_path, device, queue, texture_bind_group_layout);
+        let texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    // sampled texture at binding 0
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    // sampled texture at binding 1
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        // this should match the filterable field of the corresponding Texture entry above
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+                label: Some("texture_bind_group_layout"),
+            });
+
+        let sprite = Sprite::new(image_path, device, queue, &texture_bind_group_layout);
         // loop through and make a square of texture instances
         let instances = (0..NUM_INSTANCES_PER_ROW)
             .flat_map(|z| {
@@ -195,6 +221,7 @@ impl RenderBlock {
             sprite,
             instances,
             instance_buffer,
+            texture_bind_group_layout,
         }
     }
 }
@@ -210,7 +237,7 @@ struct State<'a> {
     index_buffer: wgpu::Buffer,
     num_indices: u32,
     tree_render_object: RenderBlock,
-    cartoon_sprite: Sprite,
+    cartoon_render_object: RenderBlock,
     // input shit
     is_space_pressed: bool,
     camera: Camera,
@@ -218,8 +245,6 @@ struct State<'a> {
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     camera_controller: CameraController,
-    instances: Vec<Instance>,
-    instance_buffer: wgpu::Buffer,
     // window must be declared after surface so it gets dropped after it
     // surface contains unsafe references to window's references
     window: &'a Window,
@@ -298,32 +323,6 @@ impl<'a> State<'a> {
             desired_maximum_frame_latency: 2,
         };
 
-        let texture_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    // sampled texture at binding 0
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        },
-                        count: None,
-                    },
-                    // sampled texture at binding 1
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        // this should match the filterable field of the corresponding Texture entry above
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-                label: Some("texture_bind_group_layout"),
-            });
-
         // we should refactor this at some point
 
         // grab image from file
@@ -331,49 +330,14 @@ impl<'a> State<'a> {
             "src/happy-tree.png",
             &device,
             &queue,
-            &texture_bind_group_layout,
         );
 
         // get second cartoon texture
-        let cartoon_sprite = Sprite::new(
+        let cartoon_render_object = RenderBlock::new(
             "src/happy-tree-cartoon.png",
             &device,
             &queue,
-            &texture_bind_group_layout,
         );
-
-        // loop through and make a square of texture instances
-        let instances = (0..NUM_INSTANCES_PER_ROW)
-            .flat_map(|z| {
-                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                    let position = cgmath::Vector3 {
-                        x: x as f32,
-                        y: 0.0,
-                        z: z as f32,
-                    } - INSTANCE_DISPLACEMENT;
-
-                    let rotation = if position.is_zero() {
-                        // this is needed so an object at (0, 0, 0) won't get scaled to zero
-                        // as Quaternions can affect scale if they're not created correctly
-                        cgmath::Quaternion::from_axis_angle(
-                            cgmath::Vector3::unit_z(),
-                            cgmath::Deg(0.0),
-                        )
-                    } else {
-                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
-                    };
-
-                    Instance { position, rotation }
-                })
-            })
-            .collect::<Vec<_>>();
-
-        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
-        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Instance Buffer"),
-            contents: bytemuck::cast_slice(&instance_data),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -436,7 +400,7 @@ impl<'a> State<'a> {
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout],
+                bind_group_layouts: &[&tree_render_object.texture_bind_group_layout, &camera_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -517,15 +481,13 @@ impl<'a> State<'a> {
             index_buffer,
             num_indices,
             tree_render_object,
-            cartoon_sprite,
+            cartoon_render_object,
             is_space_pressed: false,
             camera,
             camera_uniform,
             camera_buffer,
             camera_bind_group,
             camera_controller,
-            instances,
-            instance_buffer,
         }
     }
 
@@ -623,7 +585,7 @@ impl<'a> State<'a> {
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
             // have to set vertex buffer in render method, else everything will crash
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+            render_pass.set_vertex_buffer(1, self.tree_render_object.instance_buffer.slice(..));
             // we can have only one index buffer at a time
             render_pass.set_index_buffer(
                 self.index_buffer.slice(..),
