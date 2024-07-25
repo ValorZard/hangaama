@@ -608,8 +608,11 @@ impl<'a> State<'a> {
                 0..self.tree_render_object.instances.len() as _,
             );
             
-            /* 
+            
             // cartoon
+
+            &self.cartoon_render_object.add_instance(-5.0, 0.0);
+            &self.cartoon_render_object.add_instance(0.0, 0.0);
 
             // use our BindGroup
             render_pass.set_bind_group(0, &self.cartoon_render_object.sprite.bind_group, &[]);
@@ -617,7 +620,7 @@ impl<'a> State<'a> {
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
             // have to set vertex buffer in render method, else everything will crash
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+            render_pass.set_vertex_buffer(1, self.cartoon_render_object.get_instance_buffer(&self.device).slice(..));
             // we can have only one index buffer at a time
             render_pass.set_index_buffer(
                 self.index_buffer.slice(..),
@@ -629,7 +632,6 @@ impl<'a> State<'a> {
                 0,
                 0..self.cartoon_render_object.instances.len() as _,
             );
-            */
         }
 
         // submit will accept anything that implements IntoIter
