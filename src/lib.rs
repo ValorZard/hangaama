@@ -144,7 +144,7 @@ const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
     NUM_INSTANCES_PER_ROW as f32 * 0.5,
 );
 
-struct RenderObject {
+struct RenderBlock {
     sprite: Sprite,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
@@ -153,7 +153,7 @@ struct RenderObject {
     num_indices: u32,
 }
 
-impl RenderObject {
+impl RenderBlock {
     fn new(
         image_path: &str,
         device: &wgpu::Device,
@@ -228,7 +228,7 @@ struct State<'a> {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     num_indices: u32,
-    tree_render_object: RenderObject,
+    tree_render_object: RenderBlock,
     cartoon_sprite: Sprite,
     // input shit
     is_space_pressed: bool,
@@ -346,7 +346,7 @@ impl<'a> State<'a> {
         // we should refactor this at some point
 
         // grab image from file
-        let tree_render_object = RenderObject::new(
+        let tree_render_object = RenderBlock::new(
             "src/happy-tree.png",
             &device,
             &queue,
@@ -632,7 +632,7 @@ impl<'a> State<'a> {
                 &self.tree_sprite.bind_group
             };
             */
-            
+
             // set pipeline using the one we created
             render_pass.set_pipeline(&self.render_pipeline);
 
