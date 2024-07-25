@@ -189,6 +189,10 @@ impl RenderBlock {
         &self.instances.push(instance);
     }
 
+    fn clear_instances(&mut self){
+        &self.instances.clear();
+    }
+
     fn get_instance_buffer(&self, device: &wgpu::Device) -> wgpu::Buffer
     {
         // refresh these bits
@@ -212,8 +216,7 @@ struct State<'a> {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     num_indices: u32,
-    tree_render_object: RenderBlock,
-    cartoon_render_object: RenderBlock,
+    render_blocks: Vec<RenderBlock>,
     // input shit
     is_space_pressed: bool,
     camera: Camera,
@@ -327,21 +330,22 @@ impl<'a> State<'a> {
 
         // we should refactor this at some point
 
+        let mut render_blocks = Vec::new();
         // grab image from file
-        let tree_render_object = RenderBlock::new(
+        render_blocks.push(RenderBlock::new(
             "src/happy-tree.png",
             &device,
             &queue,
             &texture_bind_group_layout,
-        );
+        ));
 
         // get second cartoon texture
-        let cartoon_render_object = RenderBlock::new(
+        render_blocks.push(RenderBlock::new(
             "src/happy-tree-cartoon.png",
             &device,
             &queue,
             &texture_bind_group_layout,
-        );
+        ));
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -484,8 +488,7 @@ impl<'a> State<'a> {
             vertex_buffer,
             index_buffer,
             num_indices,
-            tree_render_object,
-            cartoon_render_object,
+            render_blocks,
             is_space_pressed: false,
             camera,
             camera_uniform,
@@ -510,6 +513,11 @@ impl<'a> State<'a> {
 
     fn input(&mut self, event: &WindowEvent) -> bool {
         self.camera_controller.process_events(event)
+    }
+
+    fn add_render_block(&mut self, image_path: &str)
+    {
+        
     }
 
     fn update(&mut self) {
@@ -583,55 +591,35 @@ impl<'a> State<'a> {
             // set pipeline using the one we created
             render_pass.set_pipeline(&self.render_pipeline);
 
-             
-            // tree
-            &self.tree_render_object.add_instance(0.0, 5.0);
-            &self.tree_render_object.add_instance(5.0, 5.0);
-            &self.tree_render_object.add_instance(5.0, 0.0);
+            let mut x = 0.0;
+            let mut y = 0.0;
 
-            // use our BindGroup
-            render_pass.set_bind_group(0, &self.tree_render_object.sprite.bind_group, &[]);
-            // set camera bind group
-            render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
-            // have to set vertex buffer in render method, else everything will crash
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_vertex_buffer(1, self.tree_render_object.get_instance_buffer(&self.device).slice(..));
-            // we can have only one index buffer at a time
-            render_pass.set_index_buffer(
-                self.index_buffer.slice(..),
-                wgpu::IndexFormat::Uint16,
-            );
-            // we're using draw_indexed not draw(), since draw ignores index buffer.
-            render_pass.draw_indexed(
-                0..self.num_indices,
-                0,
-                0..self.tree_render_object.instances.len() as _,
-            );
-            
-            
-            // cartoon
-
-            &self.cartoon_render_object.add_instance(-5.0, 0.0);
-            &self.cartoon_render_object.add_instance(0.0, 0.0);
-
-            // use our BindGroup
-            render_pass.set_bind_group(0, &self.cartoon_render_object.sprite.bind_group, &[]);
-            // set camera bind group
-            render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
-            // have to set vertex buffer in render method, else everything will crash
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_vertex_buffer(1, self.cartoon_render_object.get_instance_buffer(&self.device).slice(..));
-            // we can have only one index buffer at a time
-            render_pass.set_index_buffer(
-                self.index_buffer.slice(..),
-                wgpu::IndexFormat::Uint16,
-            );
-            // we're using draw_indexed not draw(), since draw ignores index buffer.
-            render_pass.draw_indexed(
-                0..self.num_indices,
-                0,
-                0..self.cartoon_render_object.instances.len() as _,
-            );
+            // render all "render blocks"
+            for render_block in self.render_blocks.iter_mut() {
+                render_block.add_instance(x, y);
+                x += 5.0;
+                y += 5.0;
+                // use our BindGroup
+                render_pass.set_bind_group(0, &render_block.sprite.bind_group, &[]);
+                // set camera bind group
+                render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
+                // have to set vertex buffer in render method, else everything will crash
+                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                render_pass.set_vertex_buffer(1, render_block.get_instance_buffer(&self.device).slice(..));
+                // we can have only one index buffer at a time
+                render_pass.set_index_buffer(
+                    self.index_buffer.slice(..),
+                    wgpu::IndexFormat::Uint16,
+                );
+                // we're using draw_indexed not draw(), since draw ignores index buffer.
+                render_pass.draw_indexed(
+                    0..self.num_indices,
+                    0,
+                    0..render_block.instances.len() as _,
+                );
+                // since this is being called every frame (i think), clear the instances since we might change them later
+                render_block.clear_instances();
+            }
         }
 
         // submit will accept anything that implements IntoIter
