@@ -58,19 +58,19 @@ const VERTICES: &[Vertex] = &[
     // Changed
     Vertex {
         position: [1.0, 1.0, 0.0],
-        tex_coords: [1.0, 1.0],
+        tex_coords: [1.0, 0.0],
     }, // A
     Vertex {
         position: [-1.0, 1.0, 0.0],
-        tex_coords: [0.0, 1.0],
+        tex_coords: [0.0, 0.0],
     }, // B
     Vertex {
         position: [-1.0, -1.0, 0.0],
-        tex_coords: [0.0, 0.0],
+        tex_coords: [0.0, 1.0],
     }, // C
     Vertex {
         position: [1.0, -1.0, 0.0],
-        tex_coords: [1.0, 0.0],
+        tex_coords: [1.0, 1.0],
     },
 ];
 
@@ -158,30 +158,7 @@ impl RenderBlock {
     ) -> Self {
         let sprite = Sprite::new(image_path, device, queue, texture_bind_group_layout);
         // loop through and make a square of texture instances
-        let instances = (0..NUM_INSTANCES_PER_ROW)
-            .flat_map(|z| {
-                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                    let position = cgmath::Vector3 {
-                        x: x as f32,
-                        y: 0.0,
-                        z: z as f32,
-                    } - INSTANCE_DISPLACEMENT;
-
-                    let rotation = if position.is_zero() {
-                        // this is needed so an object at (0, 0, 0) won't get scaled to zero
-                        // as Quaternions can affect scale if they're not created correctly
-                        cgmath::Quaternion::from_axis_angle(
-                            cgmath::Vector3::unit_z(),
-                            cgmath::Deg(0.0),
-                        )
-                    } else {
-                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
-                    };
-
-                    Instance { position, rotation }
-                })
-            })
-            .collect::<Vec<_>>();
+        let instances = Vec::new();
 
         Self {
             sprite,
@@ -204,7 +181,7 @@ impl RenderBlock {
                 cgmath::Deg(0.0),
             )
         } else {
-            cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
+            cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(0.0))
         };
 
         let instance = Instance { position, rotation };
@@ -608,6 +585,9 @@ impl<'a> State<'a> {
 
              
             // tree
+            &self.tree_render_object.add_instance(0.0, 5.0);
+            &self.tree_render_object.add_instance(5.0, 5.0);
+            &self.tree_render_object.add_instance(5.0, 0.0);
 
             // use our BindGroup
             render_pass.set_bind_group(0, &self.tree_render_object.sprite.bind_group, &[]);
