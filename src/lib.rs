@@ -216,6 +216,7 @@ struct State<'a> {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     num_indices: u32,
+    texture_bind_group_layout: wgpu::BindGroupLayout,
     render_blocks: Vec<RenderBlock>,
     // input shit
     is_space_pressed: bool,
@@ -331,21 +332,6 @@ impl<'a> State<'a> {
         // we should refactor this at some point
 
         let mut render_blocks = Vec::new();
-        // grab image from file
-        render_blocks.push(RenderBlock::new(
-            "src/happy-tree.png",
-            &device,
-            &queue,
-            &texture_bind_group_layout,
-        ));
-
-        // get second cartoon texture
-        render_blocks.push(RenderBlock::new(
-            "src/happy-tree-cartoon.png",
-            &device,
-            &queue,
-            &texture_bind_group_layout,
-        ));
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -488,6 +474,7 @@ impl<'a> State<'a> {
             vertex_buffer,
             index_buffer,
             num_indices,
+            texture_bind_group_layout,
             render_blocks,
             is_space_pressed: false,
             camera,
@@ -517,7 +504,12 @@ impl<'a> State<'a> {
 
     fn add_render_block(&mut self, image_path: &str)
     {
-        
+        let _ = &self.render_blocks.push(RenderBlock::new(
+            image_path,
+            &self.device,
+            &self.queue,
+            &self.texture_bind_group_layout,
+        ));
     }
 
     fn update(&mut self) {
@@ -620,6 +612,9 @@ impl<'a> State<'a> {
                 // since this is being called every frame (i think), clear the instances since we might change them later
                 render_block.clear_instances();
             }
+
+            // delete all render blocks so we can readd them next frame
+            self.render_blocks.clear();
         }
 
         // submit will accept anything that implements IntoIter
@@ -699,6 +694,12 @@ pub async fn run() {
                                 }
 
                                 state.update();
+                                
+                                // add things to render
+                                state.add_render_block("src/happy-tree.png");
+                                state.add_render_block("src/happy-tree-cartoon.png");
+
+                                // render
                                 match state.render() {
                                     Ok(_) => {}
                                     // Reconfigure the surface if it's lost or outdated
