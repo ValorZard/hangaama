@@ -146,11 +146,8 @@ const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
 
 struct RenderBlock {
     sprite: Sprite,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
-    num_indices: u32,
 }
 
 impl RenderBlock {
@@ -194,26 +191,10 @@ impl RenderBlock {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-        let num_indices = INDICES.len() as u32;
-
         Self {
             sprite,
-            vertex_buffer,
-            index_buffer,
             instances,
             instance_buffer,
-            num_indices,
         }
     }
 }
@@ -641,16 +622,16 @@ impl<'a> State<'a> {
             // set camera bind group
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
             // have to set vertex buffer in render method, else everything will crash
-            render_pass.set_vertex_buffer(0, self.tree_render_object.vertex_buffer.slice(..));
-            render_pass.set_vertex_buffer(1, self.tree_render_object.instance_buffer.slice(..));
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             // we can have only one index buffer at a time
             render_pass.set_index_buffer(
-                self.tree_render_object.index_buffer.slice(..),
+                self.index_buffer.slice(..),
                 wgpu::IndexFormat::Uint16,
             );
             // we're using draw_indexed not draw(), since draw ignores index buffer.
             render_pass.draw_indexed(
-                0..self.tree_render_object.num_indices,
+                0..self.num_indices,
                 0,
                 0..self.tree_render_object.instances.len() as _,
             );
