@@ -8,13 +8,13 @@ pub struct Sprite {
 impl Sprite {
     pub fn new(image_path: &str, device: &wgpu::Device, queue: &wgpu::Queue, texture_bind_group_layout : &wgpu::BindGroupLayout) -> Self {
         // grab image from file
-        let diffuse_bytes = include_bytes!("happy-tree.png");
+        let diffuse_bytes = std::fs::read(image_path).unwrap();
         let texture =
-            texture::Texture::from_bytes(device, queue, diffuse_bytes, "happy-tree.png").unwrap();
+            texture::Texture::from_bytes(device, queue, &diffuse_bytes, image_path).unwrap();
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: texture_bind_group_layout,
-            entries: &[
+            entries: &[ 
                 wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::TextureView(&texture.view),

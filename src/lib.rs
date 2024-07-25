@@ -156,8 +156,7 @@ struct State<'a> {
     index_buffer: wgpu::Buffer,
     num_indices: u32,
     tree_sprite: Sprite,
-    cartoon_texture: texture::Texture,
-    cartoon_bind_group: wgpu::BindGroup,
+    cartoon_sprite: Sprite,
     // input shit
     is_space_pressed: bool,
     camera: Camera,
@@ -274,28 +273,10 @@ impl<'a> State<'a> {
         // we should refactor this at some point
 
         // grab image from file
-        let tree_sprite = Sprite::new("happy-tree.png", &device, &queue, &texture_bind_group_layout);
+        let tree_sprite = Sprite::new("src/happy-tree.png", &device, &queue, &texture_bind_group_layout);
 
         // get second cartoon texture
-        let cartoon_bytes = include_bytes!("happy-tree-cartoon.png");
-        let cartoon_texture =
-            texture::Texture::from_bytes(&device, &queue, cartoon_bytes, "happy-tree-cartoon.png")
-                .unwrap();
-
-        let cartoon_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&cartoon_texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&cartoon_texture.sampler),
-                },
-            ],
-            label: Some("cartoon_bind_group"),
-        });
+        let cartoon_sprite = Sprite::new("src/happy-tree-cartoon.png", &device, &queue, &texture_bind_group_layout);
 
         // loop through and make a square of texture instances
         let instances = (0..NUM_INSTANCES_PER_ROW)
@@ -474,8 +455,7 @@ impl<'a> State<'a> {
             index_buffer,
             num_indices,
             tree_sprite,
-            cartoon_texture,
-            cartoon_bind_group,
+            cartoon_sprite,
             is_space_pressed: false,
             camera,
             camera_uniform,
@@ -565,7 +545,7 @@ impl<'a> State<'a> {
 
             // switch texture on press
             let bind_group = if self.camera_controller.is_space_pressed {
-                &self.cartoon_bind_group
+                &self.cartoon_sprite.bind_group
             } else {
                 &self.tree_sprite.bind_group
             };
