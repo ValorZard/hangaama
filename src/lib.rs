@@ -144,6 +144,80 @@ const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
     NUM_INSTANCES_PER_ROW as f32 * 0.5,
 );
 
+struct RenderObject {
+    sprite: Sprite,
+    vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
+    instances: Vec<Instance>,
+    instance_buffer: wgpu::Buffer,
+    num_indices: u32,
+}
+
+impl RenderObject {
+    fn new(
+        image_path: &str,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        texture_bind_group_layout: &wgpu::BindGroupLayout,
+    ) -> Self {
+        let sprite = Sprite::new(image_path, device, queue, texture_bind_group_layout);
+        // loop through and make a square of texture instances
+        let instances = (0..NUM_INSTANCES_PER_ROW)
+            .flat_map(|z| {
+                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                    let position = cgmath::Vector3 {
+                        x: x as f32,
+                        y: 0.0,
+                        z: z as f32,
+                    } - INSTANCE_DISPLACEMENT;
+
+                    let rotation = if position.is_zero() {
+                        // this is needed so an object at (0, 0, 0) won't get scaled to zero
+                        // as Quaternions can affect scale if they're not created correctly
+                        cgmath::Quaternion::from_axis_angle(
+                            cgmath::Vector3::unit_z(),
+                            cgmath::Deg(0.0),
+                        )
+                    } else {
+                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
+                    };
+
+                    Instance { position, rotation }
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance Buffer"),
+            contents: bytemuck::cast_slice(&instance_data),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(VERTICES),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(INDICES),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+        let num_indices = INDICES.len() as u32;
+
+        Self {
+            sprite,
+            vertex_buffer,
+            index_buffer,
+            instances,
+            instance_buffer,
+            num_indices,
+        }
+    }
+}
+
 struct State<'a> {
     surface: wgpu::Surface<'a>,
     device: wgpu::Device,
@@ -154,7 +228,7 @@ struct State<'a> {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     num_indices: u32,
-    tree_sprite: Sprite,
+    tree_render_object: RenderObject,
     cartoon_sprite: Sprite,
     // input shit
     is_space_pressed: bool,
@@ -272,10 +346,20 @@ impl<'a> State<'a> {
         // we should refactor this at some point
 
         // grab image from file
-        let tree_sprite = Sprite::new("src/happy-tree.png", &device, &queue, &texture_bind_group_layout);
+        let tree_render_object = RenderObject::new(
+            "src/happy-tree.png",
+            &device,
+            &queue,
+            &texture_bind_group_layout,
+        );
 
         // get second cartoon texture
-        let cartoon_sprite = Sprite::new("src/happy-tree-cartoon.png", &device, &queue, &texture_bind_group_layout);
+        let cartoon_sprite = Sprite::new(
+            "src/happy-tree-cartoon.png",
+            &device,
+            &queue,
+            &texture_bind_group_layout,
+        );
 
         // loop through and make a square of texture instances
         let instances = (0..NUM_INSTANCES_PER_ROW)
@@ -451,7 +535,7 @@ impl<'a> State<'a> {
             vertex_buffer,
             index_buffer,
             num_indices,
-            tree_sprite,
+            tree_render_object,
             cartoon_sprite,
             is_space_pressed: false,
             camera,
@@ -541,25 +625,35 @@ impl<'a> State<'a> {
             });
 
             // switch texture on press
+            /* 
             let bind_group = if self.camera_controller.is_space_pressed {
                 &self.cartoon_sprite.bind_group
             } else {
                 &self.tree_sprite.bind_group
             };
-
+            */
+            
             // set pipeline using the one we created
             render_pass.set_pipeline(&self.render_pipeline);
+
             // use our BindGroup
-            render_pass.set_bind_group(0, bind_group, &[]);
+            render_pass.set_bind_group(0, &self.tree_render_object.sprite.bind_group, &[]);
             // set camera bind group
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
             // have to set vertex buffer in render method, else everything will crash
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+            render_pass.set_vertex_buffer(0, self.tree_render_object.vertex_buffer.slice(..));
+            render_pass.set_vertex_buffer(1, self.tree_render_object.instance_buffer.slice(..));
             // we can have only one index buffer at a time
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.set_index_buffer(
+                self.tree_render_object.index_buffer.slice(..),
+                wgpu::IndexFormat::Uint16,
+            );
             // we're using draw_indexed not draw(), since draw ignores index buffer.
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instances.len() as _);
+            render_pass.draw_indexed(
+                0..self.tree_render_object.num_indices,
+                0,
+                0..self.tree_render_object.instances.len() as _,
+            );
         }
 
         // submit will accept anything that implements IntoIter
