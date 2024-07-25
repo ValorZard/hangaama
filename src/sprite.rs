@@ -12,6 +12,7 @@ impl Sprite {
         queue: &wgpu::Queue,
         texture_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
+        let _span = tracy_client::span!("Sprite::new()");
         // grab image from file
         let diffuse_bytes = std::fs::read(image_path).unwrap();
         let texture =

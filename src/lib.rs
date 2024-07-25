@@ -158,6 +158,7 @@ impl RenderBlock {
         queue: &wgpu::Queue,
         texture_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
+        let _span = tracy_client::span!("RenderBlock::new()");
         let sprite = Sprite::new(image_path, device, queue, texture_bind_group_layout);
         // loop through and make a square of texture instances
         let instances = Vec::new();
@@ -516,6 +517,7 @@ impl<'a> State<'a> {
     }
 
     fn update(&mut self) {
+        let _span = tracy_client::span!("update game logic");
         // usually we should have a seperate buffer called a staging buffer
         // use this second buffer to copy in the contents of our camera_buffer
         // this would let the GPU to do some optimizations
@@ -668,6 +670,8 @@ pub async fn run() {
 
     let mut now = Instant::now();
 
+    let run_span = tracy_client::span!("begin actual run()");
+
     event_loop
         .run(move |event, control_flow| {
             match event {
@@ -707,7 +711,7 @@ pub async fn run() {
 
                                 state.update();
                                 
-                                let _span = tracy_client::span!("start render");
+                                let _span2 = tracy_client::span!("start render");
                                 // add things to render
                                 state.add_render_block("src/happy-tree.png");
                                 state.add_render_block("src/happy-tree-cartoon.png");
