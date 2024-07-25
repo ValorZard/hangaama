@@ -506,6 +506,7 @@ impl<'a> State<'a> {
 
     fn add_render_block(&mut self, image_path: &str)
     {
+        let _span = tracy_client::span!("add render block");
         let _ = &self.render_blocks.push(RenderBlock::new(
             image_path,
             &self.device,
@@ -529,6 +530,7 @@ impl<'a> State<'a> {
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+        let _span = tracy_client::span!("call render()");
         // wait for surface to provide SurfaceTexture
         let output = self.surface.get_current_texture()?;
         // use this to control how render code interacts with the texture
@@ -697,12 +699,15 @@ pub async fn run() {
                                     return;
                                 }
 
+                                let _span = tracy_client::span!("game loop");
+
                                 // get delta time
                                 let delta_time = now.elapsed().as_secs_f32();
-                                println!("FPS: {}", 1.0 / delta_time);
+                                //println!("FPS: {}", 1.0 / delta_time);
 
                                 state.update();
                                 
+                                let _span = tracy_client::span!("start render");
                                 // add things to render
                                 state.add_render_block("src/happy-tree.png");
                                 state.add_render_block("src/happy-tree-cartoon.png");
