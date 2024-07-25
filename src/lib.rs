@@ -1,4 +1,6 @@
 mod sprite;
+use std::time::Instant;
+
 use crate::sprite::*;
 mod camera;
 use camera::*;
@@ -662,6 +664,8 @@ pub async fn run() {
     let mut state = State::new(&window).await;
     let mut surface_configured = false;
 
+    let mut now = Instant::now();
+
     event_loop
         .run(move |event, control_flow| {
             match event {
@@ -693,6 +697,10 @@ pub async fn run() {
                                     return;
                                 }
 
+                                // get delta time
+                                let delta_time = now.elapsed().as_secs_f32();
+                                println!("FPS: {}", 1.0 / delta_time);
+
                                 state.update();
                                 
                                 // add things to render
@@ -716,6 +724,9 @@ pub async fn run() {
                                         log::warn!("Surface timeout")
                                     }
                                 }
+
+                                // reset deltatime
+                               now = Instant::now();
                             }
                             _ => {}
                         }
