@@ -620,7 +620,7 @@ impl<'a> State<'a> {
             }
 
             // delete all render blocks so we can readd them next frame
-            self.render_blocks.clear();
+            //self.render_blocks.clear();
         }
 
         // submit will accept anything that implements IntoIter
@@ -667,6 +667,9 @@ pub async fn run() {
 
     let mut state = State::new(&window).await;
     let mut surface_configured = false;
+    // add things to render
+    state.add_render_block("src/happy-tree.png");
+    state.add_render_block("src/happy-tree-cartoon.png");
 
     let mut now = Instant::now();
 
@@ -712,9 +715,6 @@ pub async fn run() {
                                 state.update();
                                 
                                 let _span2 = tracy_client::span!("start render");
-                                // add things to render
-                                state.add_render_block("src/happy-tree.png");
-                                state.add_render_block("src/happy-tree-cartoon.png");
 
                                 // render
                                 match state.render() {
