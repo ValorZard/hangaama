@@ -189,11 +189,11 @@ impl RenderBlock {
 
         let instance = Instance { position, rotation };
 
-        &self.instances.push(instance);
+        let _ = &self.instances.push(instance);
     }
 
     fn clear_instances(&mut self){
-        &self.instances.clear();
+        let _ = &self.instances.clear();
     }
 
     fn get_instance_buffer(&self, device: &wgpu::Device) -> wgpu::Buffer
@@ -505,15 +505,23 @@ impl<'a> State<'a> {
         self.camera_controller.process_events(event)
     }
 
-    fn add_render_block(&mut self, image_path: &str)
+    fn add_render_block(&mut self, image_path: &str) -> usize
     {
         let _span = tracy_client::span!("add render block");
-        let _ = &self.render_blocks.push(RenderBlock::new(
+        let render_block = RenderBlock::new(
             image_path,
             &self.device,
             &self.queue,
             &self.texture_bind_group_layout,
-        ));
+        );
+        let index = &self.render_blocks.len();
+        let _ = &self.render_blocks.push(render_block);
+        *index
+    }
+
+    fn get_render_block(&mut self, asset_id: usize) -> &mut RenderBlock
+    {
+        self.render_blocks.get_mut(asset_id).unwrap()
     }
 
     fn update(&mut self) {
@@ -589,14 +597,8 @@ impl<'a> State<'a> {
             // set pipeline using the one we created
             render_pass.set_pipeline(&self.render_pipeline);
 
-            let mut x = 0.0;
-            let mut y = 0.0;
-
             // render all "render blocks"
-            for render_block in self.render_blocks.iter_mut() {
-                render_block.add_instance(x, y);
-                x += 5.0;
-                y += 5.0;
+            for render_block in self.render_blocks.iter_mut() { 
                 // use our BindGroup
                 render_pass.set_bind_group(0, &render_block.sprite.bind_group, &[]);
                 // set camera bind group
@@ -668,8 +670,8 @@ pub async fn run() {
     let mut state = State::new(&window).await;
     let mut surface_configured = false;
     // add things to render
-    state.add_render_block("src/happy-tree.png");
-    state.add_render_block("src/happy-tree-cartoon.png");
+    let tree_id = state.add_render_block("src/happy-tree.png");
+    let cartoon_id = state.add_render_block("src/happy-tree-cartoon.png");
 
     let mut now = Instant::now();
 
@@ -715,6 +717,9 @@ pub async fn run() {
                                 state.update();
                                 
                                 let _span2 = tracy_client::span!("start render");
+                                
+                                state.get_render_block(tree_id).add_instance(0.0, 0.0);
+                                state.get_render_block(cartoon_id).add_instance(5.0, 5.0);
 
                                 // render
                                 match state.render() {
