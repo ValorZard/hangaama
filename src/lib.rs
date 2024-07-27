@@ -518,6 +518,10 @@ impl<'a> State<'a> {
         self.asset_map.insert(image_path, render_block);
     }
 
+    fn delete_asset(&mut self, image_path: &'static str){
+        self.asset_map.remove(image_path);
+    }
+
     fn add_render_instance(&mut self, image_path: &'static str, x: f32, y: f32){
         self.add_render_instance_with_rotation_and_scaling(image_path, x, y, 0.0, 1.0, 1.0);
     }
@@ -634,6 +638,11 @@ impl<'a> State<'a> {
 
         Ok(())
     }
+
+    fn clear_assets(&mut self){
+        self.asset_map.clear()
+    }
+
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
@@ -722,7 +731,7 @@ pub async fn run() {
                                 state.add_render_instance_with_rotation("src/happy-tree-cartoon.png", 5.0, 5.0, 60.0);
                                 state.add_render_instance_with_scaling("src/happy-tree-cartoon.png", 8.0, 9.0, 2.0, 0.4);
                                 state.add_render_instance_with_rotation_and_scaling("src/happy-tree-cartoon.png", -5.0, 5.0, 32.0, 1.2, 2.2);
-                                
+
                                 // render
                                 match state.render() {
                                     Ok(_) => {}
