@@ -1,5 +1,5 @@
 mod sprite;
-use std::time::Instant;
+use std::{collections::HashMap, hash::Hash, time::Instant};
 
 use crate::sprite::*;
 mod camera;
@@ -145,7 +145,6 @@ const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
     0.0,
     NUM_INSTANCES_PER_ROW as f32 * 0.5,
 );
-
 struct RenderBlock {
     sprite: Sprite,
     instances: Vec<Instance>,
@@ -220,7 +219,8 @@ struct State<'a> {
     index_buffer: wgpu::Buffer,
     num_indices: u32,
     texture_bind_group_layout: wgpu::BindGroupLayout,
-    render_blocks: Vec<RenderBlock>,
+    // each render block is tied to the string path of where the asset is from
+    asset_map: std::collections::HashMap<&'static str, RenderBlock>,
     // input shit
     is_space_pressed: bool,
     camera: Camera,
@@ -333,8 +333,6 @@ impl<'a> State<'a> {
             });
 
         // we should refactor this at some point
-
-        let mut render_blocks = Vec::new();
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -478,7 +476,7 @@ impl<'a> State<'a> {
             index_buffer,
             num_indices,
             texture_bind_group_layout,
-            render_blocks,
+            asset_map: HashMap::new(),
             is_space_pressed: false,
             camera,
             camera_uniform,
@@ -505,23 +503,28 @@ impl<'a> State<'a> {
         self.camera_controller.process_events(event)
     }
 
-    fn add_render_block(&mut self, image_path: &str) -> usize
+    // image path has to be a string literal
+    fn load_asset(&mut self, image_path: &'static str)
     {
         let _span = tracy_client::span!("add render block");
+        if self.asset_map.contains_key(image_path) {
+            return;
+        }
         let render_block = RenderBlock::new(
             image_path,
             &self.device,
             &self.queue,
             &self.texture_bind_group_layout,
         );
-        let index = &self.render_blocks.len();
-        let _ = &self.render_blocks.push(render_block);
-        *index
+        self.asset_map.insert(image_path, render_block);
     }
 
-    fn get_render_block(&mut self, asset_id: usize) -> &mut RenderBlock
-    {
-        self.render_blocks.get_mut(asset_id).unwrap()
+    fn add_instance(&mut self, image_path: &'static str, x: f32, y: f32){
+        // add asset if it doesn't already exist
+        if !self.asset_map.contains_key(image_path) {
+            self.load_asset(image_path);
+        }
+        self.asset_map.get_mut(image_path).unwrap().add_instance(x, y);
     }
 
     fn update(&mut self) {
@@ -598,7 +601,7 @@ impl<'a> State<'a> {
             render_pass.set_pipeline(&self.render_pipeline);
 
             // render all "render blocks"
-            for render_block in self.render_blocks.iter_mut() { 
+            for mut render_block in self.asset_map.into_values() { 
                 // use our BindGroup
                 render_pass.set_bind_group(0, &render_block.sprite.bind_group, &[]);
                 // set camera bind group
@@ -670,8 +673,8 @@ pub async fn run() {
     let mut state = State::new(&window).await;
     let mut surface_configured = false;
     // add things to render
-    let tree_id = state.add_render_block("src/happy-tree.png");
-    let cartoon_id = state.add_render_block("src/happy-tree-cartoon.png");
+    state.load_asset("src/happy-tree.png");
+    state.load_asset("src/happy-tree-cartoon.png");
 
     let mut now = Instant::now();
 
@@ -718,8 +721,8 @@ pub async fn run() {
                                 
                                 let _span2 = tracy_client::span!("start render");
                                 
-                                state.get_render_block(tree_id).add_instance(0.0, 0.0);
-                                state.get_render_block(cartoon_id).add_instance(5.0, 5.0);
+                                state.add_instance("src/happy-tree.png", 0.0, 0.0);
+                                state.add_instance("src/happy-tree-cartoon.png", 5.0, 5.0);
 
                                 // render
                                 match state.render() {
