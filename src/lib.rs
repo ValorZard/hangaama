@@ -169,27 +169,19 @@ impl RenderBlock {
         }
     }
 
-    fn add_instance(&mut self, x: f32, y: f32){
+    // make sure you can't have scale be negative or things will break
+    fn add_instance(&mut self, x: f32, y: f32, rotation: f32, scale_x: f32, scale_y: f32){
         let position = cgmath::Vector3 {
             x: x,
             y: y,
             z: 0.0,
         };
 
-        let rotation = if position.is_zero() {
-            // this is needed so an object at (0, 0, 0) won't get scaled to zero
-            // as Quaternions can affect scale if they're not created correctly
-            cgmath::Quaternion::from_axis_angle(
-                cgmath::Vector3::unit_z(),
-                cgmath::Deg(0.0),
-            )
-        } else {
-            cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(0.0))
-        };
+        let rotation = cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(rotation));
 
         let scaling = cgmath::Vector3 {
-            x: 1.0,
-            y: 1.0,
+            x: scale_x,
+            y: scale_y,
             z: 1.0,
         };
 
@@ -527,12 +519,24 @@ impl<'a> State<'a> {
     }
 
     fn add_render_instance(&mut self, image_path: &'static str, x: f32, y: f32){
+        self.add_render_instance_with_rotation_and_scaling(image_path, x, y, 0.0, 1.0, 1.0);
+    }
+
+    fn add_render_instance_with_rotation(&mut self, image_path: &'static str, x: f32, y: f32, rotation: f32){
+        self.add_render_instance_with_rotation_and_scaling(image_path, x, y, rotation, 1.0, 1.0);
+    }
+
+    fn add_render_instance_with_scaling(&mut self, image_path: &'static str, x: f32, y: f32, scale_x: f32, scale_y: f32){
+        self.add_render_instance_with_rotation_and_scaling(image_path, x, y, 0.0, scale_x, scale_y);
+    }
+
+    fn add_render_instance_with_rotation_and_scaling(&mut self, image_path: &'static str, x: f32, y: f32, rotation: f32, scale_x: f32, scale_y: f32){
         let _span = tracy_client::span!("add render instance");
         // add asset if it doesn't already exist
         if !self.asset_map.contains_key(image_path) {
             self.load_asset(image_path);
         }
-        self.asset_map.get_mut(image_path).unwrap().add_instance(x, y);
+        self.asset_map.get_mut(image_path).unwrap().add_instance(x, y, rotation, scale_x, scale_y);
     }
 
     fn update(&mut self) {
@@ -715,8 +719,10 @@ pub async fn run() {
                                 
                                 // this will lag the first time this is called since we're loading it in for the first time
                                 state.add_render_instance("src/happy-tree.png", 0.0, 0.0);
-                                state.add_render_instance("src/happy-tree-cartoon.png", 5.0, 5.0);
-
+                                state.add_render_instance_with_rotation("src/happy-tree-cartoon.png", 5.0, 5.0, 60.0);
+                                state.add_render_instance_with_scaling("src/happy-tree-cartoon.png", 8.0, 9.0, 2.0, 0.4);
+                                state.add_render_instance_with_rotation_and_scaling("src/happy-tree-cartoon.png", -5.0, 5.0, 32.0, 1.2, 2.2);
+                                
                                 // render
                                 match state.render() {
                                     Ok(_) => {}
