@@ -82,6 +82,7 @@ const INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
 struct Instance {
     position: cgmath::Vector3<f32>,
     rotation: cgmath::Quaternion<f32>,
+    scaling: cgmath::Vector3<f32>,
 }
 
 #[repr(C)]
@@ -94,7 +95,7 @@ impl Instance {
     fn to_raw(&self) -> InstanceRaw {
         InstanceRaw {
             model: (cgmath::Matrix4::from_translation(self.position)
-                * cgmath::Matrix4::from(self.rotation))
+                * cgmath::Matrix4::from(self.rotation) * cgmath::Matrix4::from_nonuniform_scale(self.scaling.x, self.scaling.y, self.scaling.z))
             .into(),
         }
     }
@@ -186,7 +187,13 @@ impl RenderBlock {
             cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(0.0))
         };
 
-        let instance = Instance { position, rotation };
+        let scaling = cgmath::Vector3 {
+            x: 1.0,
+            y: 1.0,
+            z: 1.0,
+        };
+
+        let instance = Instance { position, rotation, scaling };
 
         let _ = &self.instances.push(instance);
     }
