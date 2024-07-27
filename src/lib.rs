@@ -519,7 +519,8 @@ impl<'a> State<'a> {
         self.asset_map.insert(image_path, render_block);
     }
 
-    fn add_instance(&mut self, image_path: &'static str, x: f32, y: f32){
+    fn add_render_instance(&mut self, image_path: &'static str, x: f32, y: f32){
+        let _span = tracy_client::span!("add render instance");
         // add asset if it doesn't already exist
         if !self.asset_map.contains_key(image_path) {
             self.load_asset(image_path);
@@ -588,20 +589,11 @@ impl<'a> State<'a> {
                 timestamp_writes: None,
             });
 
-            // switch texture on press
-            /* 
-            let bind_group = if self.camera_controller.is_space_pressed {
-                &self.cartoon_sprite.bind_group
-            } else {
-                &self.tree_sprite.bind_group
-            };
-            */
-
             // set pipeline using the one we created
             render_pass.set_pipeline(&self.render_pipeline);
 
             // render all "render blocks"
-            for mut render_block in self.asset_map.into_values() { 
+            for mut render_block in self.asset_map.values_mut() { 
                 // use our BindGroup
                 render_pass.set_bind_group(0, &render_block.sprite.bind_group, &[]);
                 // set camera bind group
@@ -623,9 +615,6 @@ impl<'a> State<'a> {
                 // since this is being called every frame (i think), clear the instances since we might change them later
                 render_block.clear_instances();
             }
-
-            // delete all render blocks so we can readd them next frame
-            //self.render_blocks.clear();
         }
 
         // submit will accept anything that implements IntoIter
@@ -672,10 +661,6 @@ pub async fn run() {
 
     let mut state = State::new(&window).await;
     let mut surface_configured = false;
-    // add things to render
-    state.load_asset("src/happy-tree.png");
-    state.load_asset("src/happy-tree-cartoon.png");
-
     let mut now = Instant::now();
 
     let run_span = tracy_client::span!("begin actual run()");
@@ -721,8 +706,9 @@ pub async fn run() {
                                 
                                 let _span2 = tracy_client::span!("start render");
                                 
-                                state.add_instance("src/happy-tree.png", 0.0, 0.0);
-                                state.add_instance("src/happy-tree-cartoon.png", 5.0, 5.0);
+                                // this will lag the first time this is called since we're loading it in for the first time
+                                state.add_render_instance("src/happy-tree.png", 0.0, 0.0);
+                                state.add_render_instance("src/happy-tree-cartoon.png", 5.0, 5.0);
 
                                 // render
                                 match state.render() {
