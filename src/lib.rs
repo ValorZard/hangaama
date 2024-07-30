@@ -645,11 +645,11 @@ impl<'a> State<'a> {
 
 }
 
-pub fn game_logic(state: &mut State){
+fn game_logic(state: &mut State){
 
 }
 
-pub fn game_render(state: &mut State){
+fn game_render(state: &mut State){
     // this will lag the first time this is called since we're loading it in for the first time
     state.add_render_instance("src/happy-tree.png", 0.0, 0.0);
     state.add_render_instance_with_rotation("src/happy-tree-cartoon.png", 5.0, 5.0, 60.0);
