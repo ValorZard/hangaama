@@ -645,6 +645,18 @@ impl<'a> State<'a> {
 
 }
 
+pub fn game_logic(state: &mut State){
+
+}
+
+pub fn game_render(state: &mut State){
+    // this will lag the first time this is called since we're loading it in for the first time
+    state.add_render_instance("src/happy-tree.png", 0.0, 0.0);
+    state.add_render_instance_with_rotation("src/happy-tree-cartoon.png", 5.0, 5.0, 60.0);
+    state.add_render_instance_with_scaling("src/happy-tree-cartoon.png", 8.0, 9.0, 2.0, 0.4);
+    state.add_render_instance_with_rotation_and_scaling("src/happy-tree-cartoon.png", -5.0, 5.0, 32.0, 1.2, 2.2);
+}
+
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
 pub async fn run() {
     cfg_if::cfg_if! {
@@ -723,15 +735,13 @@ pub async fn run() {
                                 //println!("FPS: {}", 1.0 / delta_time);
 
                                 state.update();
+
+                                game_logic(&mut state);
                                 
                                 let _span2 = tracy_client::span!("start render");
                                 
-                                // this will lag the first time this is called since we're loading it in for the first time
-                                state.add_render_instance("src/happy-tree.png", 0.0, 0.0);
-                                state.add_render_instance_with_rotation("src/happy-tree-cartoon.png", 5.0, 5.0, 60.0);
-                                state.add_render_instance_with_scaling("src/happy-tree-cartoon.png", 8.0, 9.0, 2.0, 0.4);
-                                state.add_render_instance_with_rotation_and_scaling("src/happy-tree-cartoon.png", -5.0, 5.0, 32.0, 1.2, 2.2);
-
+                                game_render(&mut state);
+                                
                                 // render
                                 match state.render() {
                                     Ok(_) => {}
