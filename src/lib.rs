@@ -13,7 +13,7 @@ use winit::{
 };
 
 // need to import this to use create_buffer_init
-use cgmath::prelude::*;
+use cgmath::{prelude::*, Vector2};
 use wgpu::{core::instance, util::DeviceExt};
 
 #[cfg(target_arch = "wasm32")]
@@ -227,6 +227,7 @@ struct State<'a> {
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     camera_controller: CameraController,
+    player_controller: PlayerController,
     // window must be declared after surface so it gets dropped after it
     // surface contains unsafe references to window's references
     window: &'a Window,
@@ -482,6 +483,7 @@ impl<'a> State<'a> {
             camera_buffer,
             camera_bind_group,
             camera_controller,
+            player_controller : PlayerController::new(),
         }
     }
 
@@ -499,7 +501,7 @@ impl<'a> State<'a> {
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
-        self.camera_controller.process_events(event)
+        self.camera_controller.process_events(event) || self.player_controller.process_events(event)
     }
 
     // image path has to be a string literal
@@ -645,13 +647,110 @@ impl<'a> State<'a> {
 
 }
 
-fn game_logic(state: &mut State){
+pub struct PlayerController {
+    position: Vector2<f32>,
+    is_up_pressed: bool,
+    is_down_pressed: bool,
+    is_left_pressed: bool,
+    is_right_pressed: bool,
+    pub is_space_pressed: bool,
+}
 
+impl PlayerController {
+    pub fn new() -> Self {
+        Self {
+            position: Vector2::<f32>::new(0.0, 0.0),
+            is_up_pressed: false,
+            is_down_pressed: false,
+            is_left_pressed: false,
+            is_right_pressed: false,
+            is_space_pressed: false,
+        }
+    }
+
+    pub fn process_events(&mut self, event: &WindowEvent) -> bool {
+        match event {
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        state,
+                        physical_key: PhysicalKey::Code(keycode),
+                        ..
+                    },
+                ..
+            } => {
+                let is_pressed = *state == ElementState::Pressed;
+                match keycode {
+                    KeyCode::KeyW | KeyCode::ArrowUp => {
+                        self.is_up_pressed = is_pressed;
+                        true
+                    }
+                    KeyCode::KeyA | KeyCode::ArrowLeft => {
+                        self.is_left_pressed = is_pressed;
+                        true
+                    }
+                    KeyCode::KeyS | KeyCode::ArrowDown => {
+                        self.is_down_pressed = is_pressed;
+                        true
+                    }
+                    KeyCode::KeyD | KeyCode::ArrowRight => {
+                        self.is_right_pressed = is_pressed;
+                        true
+                    }
+                    KeyCode::Space => {
+                        self.is_space_pressed = is_pressed;
+                        true
+                    }
+                    _ => false,
+                }
+            }
+            _ => false,
+        }
+    }
+
+    pub fn update_player(&mut self, delta_time: f32) {
+        const PLAYER_SPEED : f32 = 10.0;
+
+        let mut velocity_x = 0.0;
+        let mut velocity_y = 0.0;
+
+        if self.is_up_pressed {
+            velocity_y = -1.0;
+        }
+        if self.is_down_pressed {
+            velocity_y = 1.0;
+        }
+
+        if self.is_right_pressed {
+            velocity_x = 1.0;
+        }
+        if self.is_left_pressed {
+            velocity_y = -1.0;
+        }
+
+        let mut velocity = Vector2::<f32>::new(velocity_x, velocity_y);
+
+        if !velocity.is_zero()
+        {
+            velocity = velocity.normalize_to( PLAYER_SPEED * delta_time);
+        }
+
+        self.position.x += velocity.x;
+        self.position.y += velocity.y;
+
+        println!("Velocity: {0}, {1}", velocity.x, velocity.y);
+        println!("Position: {0}, {1}", self.position.x, self.position.y);
+    }
+}
+
+fn game_logic(state: &mut State, delta_time: f32){
+    // player controller
+    state.player_controller.update_player(delta_time);
 }
 
 fn game_render(state: &mut State){
     // this will lag the first time this is called since we're loading it in for the first time
-    state.add_render_instance("src/happy-tree.png", 0.0, 0.0);
+    state.add_render_instance("src/happy-tree.png", state.player_controller.position.x, state.player_controller.position.y);
     state.add_render_instance_with_rotation("src/happy-tree-cartoon.png", 5.0, 5.0, 60.0);
     state.add_render_instance_with_scaling("src/happy-tree-cartoon.png", 8.0, 9.0, 2.0, 0.4);
     state.add_render_instance_with_rotation_and_scaling("src/happy-tree-cartoon.png", -5.0, 5.0, 32.0, 1.2, 2.2);
@@ -736,7 +835,7 @@ pub async fn run() {
 
                                 state.update();
 
-                                game_logic(&mut state);
+                                game_logic(&mut state, delta_time);
                                 
                                 let _span2 = tracy_client::span!("start render");
                                 
