@@ -1,6 +1,9 @@
 mod sprite;
 use std::{collections::HashMap, hash::Hash, time::Instant};
-
+use glyphon::{
+    Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache,
+    TextArea, TextAtlas, TextBounds, TextRenderer, Viewport,
+};
 use crate::sprite::*;
 mod camera;
 use camera::*;
@@ -14,7 +17,7 @@ use winit::{
 
 // need to import this to use create_buffer_init
 use cgmath::{prelude::*, Vector2};
-use wgpu::{core::instance, util::DeviceExt};
+use wgpu::{core::instance, util::DeviceExt, MultisampleState};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -228,6 +231,14 @@ struct State<'a> {
     camera_bind_group: wgpu::BindGroup,
     camera_controller: CameraController,
     player_controller: PlayerController,
+    // text stuff
+    font_system: FontSystem,
+    swash_cache: SwashCache,
+    viewport: glyphon::Viewport,
+    atlas: glyphon::TextAtlas,
+    text_renderer: glyphon::TextRenderer,
+    text_buffer: glyphon::Buffer,
+
     // window must be declared after surface so it gets dropped after it
     // surface contains unsafe references to window's references
     window: &'a Window,
@@ -237,6 +248,7 @@ impl<'a> State<'a> {
     // need some async code to create some of the wgpu types
     async fn new(window: &'a Window) -> State<'a> {
         let size = window.inner_size();
+        let scale_factor = window.scale_factor();
 
         // instance is a handle to our GPU
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -464,6 +476,28 @@ impl<'a> State<'a> {
         });
         let num_indices = INDICES.len() as u32;
 
+        
+        // Set up text renderer
+        let mut font_system = FontSystem::new();
+        let swash_cache = SwashCache::new();
+        let cache = Cache::new(&device);
+        let viewport = Viewport::new(&device, &cache);
+        let mut atlas = TextAtlas::new(&device, &queue, &cache, surface_format);
+        let text_renderer =
+            TextRenderer::new(&mut atlas, &device, MultisampleState::default(), None);
+        let mut text_buffer = Buffer::new(&mut font_system, Metrics::new(30.0, 42.0));
+
+        let physical_width = (size.width as f64 * scale_factor) as f32;
+        let physical_height = (size.height as f64 * scale_factor) as f32;
+
+        text_buffer.set_size(
+            &mut font_system,
+            Some(physical_width),
+            Some(physical_height),
+        );
+        text_buffer.set_text(&mut font_system, "Hello world! 👋\nThis is rendered with 🦅 glyphon 🦁\nThe text below should be partially clipped.\na b c d e f g h i j k l m n o p q r s t u v w x y z", Attrs::new().family(Family::SansSerif), Shaping::Advanced);
+        text_buffer.shape_until_scroll(&mut font_system, false);
+
         Self {
             window,
             surface,
@@ -484,6 +518,12 @@ impl<'a> State<'a> {
             camera_bind_group,
             camera_controller,
             player_controller : PlayerController::new(),
+            font_system,
+            swash_cache,
+            viewport,
+            atlas,
+            text_renderer,
+            text_buffer,
         }
     }
 
@@ -576,6 +616,32 @@ impl<'a> State<'a> {
                 label: Some("Render Encoder"),
             });
 
+        // text stuff
+        self.text_renderer
+                    .prepare(
+                        &self.device,
+                        &self.queue,
+                        &mut self.font_system,
+                        &mut self.atlas,
+                        &self.viewport,
+                        [TextArea {
+                            buffer: &self.text_buffer,
+                            left: 10.0,
+                            top: 10.0,
+                            scale: 1.0,
+                            bounds: TextBounds {
+                                left: 0,
+                                top: 0,
+                                right: 600,
+                                bottom: 160,
+                            },
+                            default_color: Color::rgb(255, 255, 255),
+                        }],
+                        &mut self.swash_cache,
+                    )
+                    .unwrap();
+
+        
         // clearing the screen using a RenderPass
         // put this inside a block so that we can tell rust to drop all variables inside of it
         // because of borrow checker shenanigans
@@ -632,6 +698,9 @@ impl<'a> State<'a> {
                 // since this is being called every frame (i think), clear the instances since we might change them later
                 render_block.clear_instances();
             }
+
+            // render text last
+            self.text_renderer.render(&self.atlas, &self.viewport, &mut render_pass).unwrap();
         }
 
         // submit will accept anything that implements IntoIter
