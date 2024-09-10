@@ -237,7 +237,7 @@ struct State<'a> {
     viewport: glyphon::Viewport,
     atlas: glyphon::TextAtlas,
     text_renderer: glyphon::TextRenderer,
-    text_buffer: glyphon::Buffer,
+    text_buffers: Vec<glyphon::Buffer>,
 
     // window must be declared after surface so it gets dropped after it
     // surface contains unsafe references to window's references
@@ -485,18 +485,8 @@ impl<'a> State<'a> {
         let mut atlas = TextAtlas::new(&device, &queue, &cache, surface_format);
         let text_renderer =
             TextRenderer::new(&mut atlas, &device, MultisampleState::default(), None);
-        let mut text_buffer = Buffer::new(&mut font_system, Metrics::new(30.0, 42.0));
 
-        let physical_width = (size.width as f64 * scale_factor) as f32;
-        let physical_height = (size.height as f64 * scale_factor) as f32;
-
-        text_buffer.set_size(
-            &mut font_system,
-            Some(physical_width),
-            Some(physical_height),
-        );
-        text_buffer.set_text(&mut font_system, "Hello world! 👋\nThis is rendered with 🦅 glyphon 🦁\nThe text below should be partially clipped.\na b c d e f g h i j k l m n o p q r s t u v w x y z", Attrs::new().family(Family::SansSerif), Shaping::Advanced);
-        text_buffer.shape_until_scroll(&mut font_system, false);
+        let mut text_buffers = Vec::<glyphon::Buffer>::new();
 
         Self {
             window,
@@ -523,7 +513,7 @@ impl<'a> State<'a> {
             viewport,
             atlas,
             text_renderer,
-            text_buffer,
+            text_buffers,
         }
     }
 
@@ -587,7 +577,22 @@ impl<'a> State<'a> {
 
     fn set_text(&mut self, text : &str)
     {
-        self.text_buffer.set_text(&mut self.font_system, text, Attrs::new().family(Family::SansSerif), Shaping::Advanced);
+        let size = self.window.inner_size();
+        let scale_factor = self.window.scale_factor();
+
+        let mut text_buffer = Buffer::new(&mut self.font_system, Metrics::new(30.0, 42.0));
+
+        let physical_width = (size.width as f64 * scale_factor) as f32;
+        let physical_height = (size.height as f64 * scale_factor) as f32;
+
+        text_buffer.set_size(
+            &mut self.font_system,
+            Some(physical_width),
+            Some(physical_height),
+        );
+        text_buffer.set_text(&mut self.font_system,  text, Attrs::new().family(Family::SansSerif), Shaping::Advanced);
+        text_buffer.shape_until_scroll(&mut self.font_system, false);
+        self.text_buffers.push(text_buffer);
     }
 
     fn update(&mut self) {
@@ -626,6 +631,25 @@ impl<'a> State<'a> {
             });
 
         // text stuff
+
+        let mut text_areas = Vec::<TextArea>::new();
+        
+        for buffer in &self.text_buffers {
+            text_areas.push(TextArea {
+                buffer,
+                left: 10.0,
+                top: 10.0,
+                scale: 1.0,
+                bounds: TextBounds {
+                    left: 0,
+                    top: 0,
+                    right: 600,
+                    bottom: 160,
+                },
+                default_color: Color::rgb(255, 255, 255),
+            });
+        }
+
         self.text_renderer
                     .prepare(
                         &self.device,
@@ -633,19 +657,7 @@ impl<'a> State<'a> {
                         &mut self.font_system,
                         &mut self.atlas,
                         &self.viewport,
-                        [TextArea {
-                            buffer: &self.text_buffer,
-                            left: 10.0,
-                            top: 10.0,
-                            scale: 1.0,
-                            bounds: TextBounds {
-                                left: 0,
-                                top: 0,
-                                right: 600,
-                                bottom: 160,
-                            },
-                            default_color: Color::rgb(255, 255, 255),
-                        }],
+                        text_areas,
                         &mut self.swash_cache,
                     )
                     .unwrap();
@@ -717,6 +729,9 @@ impl<'a> State<'a> {
         output.present();
 
         &self.atlas.trim();
+
+        // delete text buffers
+        self.text_buffers.clear();
 
         Ok(())
     }
