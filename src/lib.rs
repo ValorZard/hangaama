@@ -643,8 +643,8 @@ impl<'a> State<'a> {
                 bounds: TextBounds {
                     left: 0,
                     top: 0,
-                    right: 600,
-                    bottom: 160,
+                    right: 300,
+                    bottom: 50,
                 },
                 default_color: Color::rgb(255, 255, 255),
             });
