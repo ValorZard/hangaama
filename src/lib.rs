@@ -608,6 +608,10 @@ impl<'a> State<'a> {
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+        self.viewport.update(&self.queue, Resolution {
+            width: self.size.width,
+            height: self.size.height,
+        });
         // create CommandEncoder to create actual commands to send to GPU
         // commands have to be stored in a command buffer to send to GPU
         let mut encoder = self
