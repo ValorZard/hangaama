@@ -1,5 +1,5 @@
 mod sprite;
-use std::{collections::HashMap, hash::Hash, time::Instant};
+use std::{collections::HashMap, time::Instant};
 use glyphon::{
     Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache,
     TextArea, TextAtlas, TextBounds, TextRenderer, Viewport,
@@ -17,7 +17,7 @@ use winit::{
 
 // need to import this to use create_buffer_init
 use cgmath::{prelude::*, Vector2};
-use wgpu::{core::instance, util::DeviceExt, MultisampleState};
+use wgpu::{util::DeviceExt, MultisampleState};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -248,8 +248,6 @@ impl<'a> State<'a> {
     // need some async code to create some of the wgpu types
     async fn new(window: &'a Window) -> State<'a> {
         let size = window.inner_size();
-        let scale_factor = window.scale_factor();
-
         // instance is a handle to our GPU
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             #[cfg(not(target_arch = "wasm32"))]
@@ -478,7 +476,7 @@ impl<'a> State<'a> {
 
         
         // Set up text renderer
-        let mut font_system = FontSystem::new();
+        let font_system = FontSystem::new();
         let swash_cache = SwashCache::new();
         let cache = Cache::new(&device);
         let viewport = Viewport::new(&device, &cache);
@@ -486,7 +484,7 @@ impl<'a> State<'a> {
         let text_renderer =
             TextRenderer::new(&mut atlas, &device, MultisampleState::default(), None);
 
-        let mut text_buffers = Vec::<glyphon::Buffer>::new();
+        let text_buffers = Vec::<glyphon::Buffer>::new();
 
         Self {
             window,
@@ -701,7 +699,7 @@ impl<'a> State<'a> {
             render_pass.set_pipeline(&self.render_pipeline);
 
             // render all "render blocks"
-            for mut render_block in self.asset_map.values_mut() { 
+            for render_block in self.asset_map.values_mut() { 
                 // use our BindGroup
                 render_pass.set_bind_group(0, &render_block.sprite.bind_group, &[]);
                 // set camera bind group
@@ -732,7 +730,7 @@ impl<'a> State<'a> {
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
-        &self.atlas.trim();
+        let _ = &self.atlas.trim();
 
         // delete text buffers
         self.text_buffers.clear();
@@ -890,7 +888,7 @@ pub async fn run() {
     let mut surface_configured = false;
     let mut now = Instant::now();
 
-    let run_span = tracy_client::span!("begin actual run()");
+    let _run_span = tracy_client::span!("begin actual run()");
 
     event_loop
         .run(move |event, control_flow| {
@@ -929,7 +927,7 @@ pub async fn run() {
                                 let delta_time = now.elapsed().as_secs_f32();
                                 state.set_text(&format!("FPS: {}", 1.0 / delta_time));
                                 state.set_text(&format!("Position: {0}, {1}", state.player_controller.position.x, state.player_controller.position.y));
-                                
+
                                 state.update();
 
                                 game_logic(&mut state, delta_time);
