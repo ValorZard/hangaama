@@ -529,7 +529,7 @@ impl<'a> State<'a> {
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
-        self.camera_controller.process_events(event) || self.player_controller.process_events(event)
+        self.camera_controller.process_events(event) && self.player_controller.process_events(event)
     }
 
     // image path has to be a string literal
@@ -806,23 +806,23 @@ impl PlayerController {
     }
 
     pub fn update_player(&mut self, delta_time: f32) {
-        const PLAYER_SPEED : f32 = 10.0;
+        const PLAYER_SPEED : f32 = 100.0;
 
         let mut velocity_x = 0.0;
         let mut velocity_y = 0.0;
 
         if self.is_up_pressed {
-            velocity_y = -1.0;
+            velocity_y = 1.0;
         }
         if self.is_down_pressed {
-            velocity_y = 1.0;
+            velocity_y = -1.0;
         }
 
         if self.is_right_pressed {
             velocity_x = 1.0;
         }
         if self.is_left_pressed {
-            velocity_y = -1.0;
+            velocity_x = -1.0;
         }
 
         let mut velocity = Vector2::<f32>::new(velocity_x, velocity_y);
