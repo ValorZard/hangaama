@@ -230,7 +230,8 @@ struct State<'a> {
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     camera_controller: CameraController,
-    player_controller: PlayerController,
+    input_struct: InputStruct,
+    player_struct: Player,
     // text stuff
     font_system: FontSystem,
     swash_cache: SwashCache,
@@ -505,7 +506,8 @@ impl<'a> State<'a> {
             camera_buffer,
             camera_bind_group,
             camera_controller,
-            player_controller : PlayerController::new(),
+            input_struct: InputStruct::new(),
+            player_struct : Player::new(),
             font_system,
             swash_cache,
             viewport,
@@ -529,7 +531,7 @@ impl<'a> State<'a> {
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
-        self.camera_controller.process_events(event) && self.player_controller.process_events(event)
+        self.camera_controller.process_events(event) && self.input_struct.process_events(event)
     }
 
     // image path has to be a string literal
@@ -744,8 +746,7 @@ impl<'a> State<'a> {
 
 }
 
-pub struct PlayerController {
-    position: Vector2<f32>,
+pub struct InputStruct {
     is_up_pressed: bool,
     is_down_pressed: bool,
     is_left_pressed: bool,
@@ -753,10 +754,9 @@ pub struct PlayerController {
     pub is_space_pressed: bool,
 }
 
-impl PlayerController {
+impl InputStruct {
     pub fn new() -> Self {
         Self {
-            position: Vector2::<f32>::new(0.0, 0.0),
             is_up_pressed: false,
             is_down_pressed: false,
             is_left_pressed: false,
@@ -804,24 +804,36 @@ impl PlayerController {
             _ => false,
         }
     }
+}
 
-    pub fn update_player(&mut self, delta_time: f32) {
+struct Player {
+    position: Vector2<f32>,
+}
+
+impl Player {
+    pub fn new() -> Self
+    {
+        Self {
+            position: Vector2::<f32>::new(0.0, 0.0),
+        }
+    }
+    pub fn update(&mut self, input : &InputStruct, delta_time: f32) {
         const PLAYER_SPEED : f32 = 100.0;
 
         let mut velocity_x = 0.0;
         let mut velocity_y = 0.0;
 
-        if self.is_up_pressed {
+        if input.is_up_pressed {
             velocity_y = 1.0;
         }
-        if self.is_down_pressed {
+        if input.is_down_pressed {
             velocity_y = -1.0;
         }
 
-        if self.is_right_pressed {
+        if input.is_right_pressed {
             velocity_x = 1.0;
         }
-        if self.is_left_pressed {
+        if input.is_left_pressed {
             velocity_x = -1.0;
         }
 
@@ -839,12 +851,12 @@ impl PlayerController {
 
 fn game_logic(state: &mut State, delta_time: f32){
     // player controller
-    state.player_controller.update_player(delta_time);
+    state.player_struct.update(&state.input_struct, delta_time);
 }
 
 fn game_render(state: &mut State){
     // this will lag the first time this is called since we're loading it in for the first time
-    state.add_render_instance("src/happy-tree.png", state.player_controller.position.x, state.player_controller.position.y);
+    state.add_render_instance("src/happy-tree.png", state.player_struct.position.x, state.player_struct.position.y);
     state.add_render_instance_with_rotation("src/happy-tree-cartoon.png", 5.0, 5.0, 60.0);
     state.add_render_instance_with_scaling("src/happy-tree-cartoon.png", 8.0, 9.0, 2.0, 0.4);
     state.add_render_instance_with_rotation_and_scaling("src/happy-tree-cartoon.png", -5.0, 5.0, 32.0, 1.2, 2.2);
@@ -926,7 +938,7 @@ pub async fn run() {
                                 // get delta time
                                 let delta_time = now.elapsed().as_secs_f32();
                                 state.set_text(&format!("FPS: {}", 1.0 / delta_time));
-                                state.set_text(&format!("Position: {0}, {1}", state.player_controller.position.x, state.player_controller.position.y));
+                                state.set_text(&format!("Position: {0}, {1}", state.player_struct.position.x, state.player_struct.position.y));
 
                                 state.update();
 
