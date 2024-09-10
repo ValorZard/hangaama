@@ -1,9 +1,14 @@
 mod sprite;
-use std::{collections::HashMap, hash::Hash, time::Instant};
-
+use std::{collections::HashMap, time::Instant};
+use glyphon::{
+    Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache,
+    TextArea, TextAtlas, TextBounds, TextRenderer, Viewport,
+};
 use crate::sprite::*;
 mod camera;
 use camera::*;
+mod input;
+use input::InputStruct;
 use winit::{
     event::*,
     event_loop::EventLoop,
@@ -14,7 +19,7 @@ use winit::{
 
 // need to import this to use create_buffer_init
 use cgmath::{prelude::*, Vector2};
-use wgpu::{core::instance, util::DeviceExt};
+use wgpu::{util::DeviceExt, MultisampleState};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -227,7 +232,16 @@ struct State<'a> {
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     camera_controller: CameraController,
-    player_controller: PlayerController,
+    input_struct: InputStruct,
+    player_struct: Player,
+    // text stuff
+    font_system: FontSystem,
+    swash_cache: SwashCache,
+    viewport: glyphon::Viewport,
+    atlas: glyphon::TextAtlas,
+    text_renderer: glyphon::TextRenderer,
+    text_buffers: Vec<glyphon::Buffer>,
+
     // window must be declared after surface so it gets dropped after it
     // surface contains unsafe references to window's references
     window: &'a Window,
@@ -237,7 +251,6 @@ impl<'a> State<'a> {
     // need some async code to create some of the wgpu types
     async fn new(window: &'a Window) -> State<'a> {
         let size = window.inner_size();
-
         // instance is a handle to our GPU
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             #[cfg(not(target_arch = "wasm32"))]
@@ -343,7 +356,7 @@ impl<'a> State<'a> {
         let camera = Camera {
             // position the camera 1 unit up and 2 units back
             // +z is out of the screen
-            eye: (0.0, 1.0, 2.0).into(),
+            eye: (0.0, 1.0, 15.0).into(),
             // have it look at the origin
             target: (0.0, 0.0, 0.0).into(),
             // which way is "up"
@@ -464,6 +477,18 @@ impl<'a> State<'a> {
         });
         let num_indices = INDICES.len() as u32;
 
+        
+        // Set up text renderer
+        let font_system = FontSystem::new();
+        let swash_cache = SwashCache::new();
+        let cache = Cache::new(&device);
+        let viewport = Viewport::new(&device, &cache);
+        let mut atlas = TextAtlas::new(&device, &queue, &cache, surface_format);
+        let text_renderer =
+            TextRenderer::new(&mut atlas, &device, MultisampleState::default(), None);
+
+        let text_buffers = Vec::<glyphon::Buffer>::new();
+
         Self {
             window,
             surface,
@@ -483,7 +508,14 @@ impl<'a> State<'a> {
             camera_buffer,
             camera_bind_group,
             camera_controller,
-            player_controller : PlayerController::new(),
+            input_struct: InputStruct::new(),
+            player_struct : Player::new(),
+            font_system,
+            swash_cache,
+            viewport,
+            atlas,
+            text_renderer,
+            text_buffers,
         }
     }
 
@@ -501,7 +533,7 @@ impl<'a> State<'a> {
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
-        self.camera_controller.process_events(event) || self.player_controller.process_events(event)
+        self.input_struct.process_events(event)
     }
 
     // image path has to be a string literal
@@ -545,6 +577,26 @@ impl<'a> State<'a> {
         self.asset_map.get_mut(image_path).unwrap().add_instance(x, y, rotation, scale_x, scale_y);
     }
 
+    fn set_text(&mut self, text : &str)
+    {
+        let size = self.window.inner_size();
+        let scale_factor = self.window.scale_factor();
+
+        let mut text_buffer = Buffer::new(&mut self.font_system, Metrics::new(30.0, 42.0));
+
+        let physical_width = (size.width as f64 * scale_factor) as f32;
+        let physical_height = (size.height as f64 * scale_factor) as f32;
+
+        text_buffer.set_size(
+            &mut self.font_system,
+            Some(physical_width),
+            Some(physical_height),
+        );
+        text_buffer.set_text(&mut self.font_system,  text, Attrs::new().family(Family::SansSerif), Shaping::Advanced);
+        text_buffer.shape_until_scroll(&mut self.font_system, false);
+        self.text_buffers.push(text_buffer);
+    }
+
     fn update(&mut self) {
         let _span = tracy_client::span!("update game logic");
         // usually we should have a seperate buffer called a staging buffer
@@ -568,6 +620,10 @@ impl<'a> State<'a> {
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+        self.viewport.update(&self.queue, Resolution {
+            width: self.size.width,
+            height: self.size.height,
+        });
         // create CommandEncoder to create actual commands to send to GPU
         // commands have to be stored in a command buffer to send to GPU
         let mut encoder = self
@@ -576,6 +632,43 @@ impl<'a> State<'a> {
                 label: Some("Render Encoder"),
             });
 
+        // text stuff
+
+        let mut text_areas = Vec::<TextArea>::new();
+        
+        let mut spacing = 0;
+
+        for buffer in &self.text_buffers {
+            text_areas.push(TextArea {
+                buffer,
+                left: 10.0,
+                top: 10.0 + (spacing as f32),
+                scale: 1.0,
+                bounds: TextBounds {
+                    left: 0,
+                    top: 0,
+                    right: 300,
+                    bottom: 50 + spacing,
+                },
+                default_color: Color::rgb(255, 255, 255),
+            });
+            // add spacing
+            spacing += 50;
+        }
+
+        self.text_renderer
+                    .prepare(
+                        &self.device,
+                        &self.queue,
+                        &mut self.font_system,
+                        &mut self.atlas,
+                        &self.viewport,
+                        text_areas,
+                        &mut self.swash_cache,
+                    )
+                    .unwrap();
+
+        
         // clearing the screen using a RenderPass
         // put this inside a block so that we can tell rust to drop all variables inside of it
         // because of borrow checker shenanigans
@@ -610,7 +703,7 @@ impl<'a> State<'a> {
             render_pass.set_pipeline(&self.render_pipeline);
 
             // render all "render blocks"
-            for mut render_block in self.asset_map.values_mut() { 
+            for render_block in self.asset_map.values_mut() { 
                 // use our BindGroup
                 render_pass.set_bind_group(0, &render_block.sprite.bind_group, &[]);
                 // set camera bind group
@@ -632,11 +725,19 @@ impl<'a> State<'a> {
                 // since this is being called every frame (i think), clear the instances since we might change them later
                 render_block.clear_instances();
             }
+
+            // render text last
+            self.text_renderer.render(&self.atlas, &self.viewport, &mut render_pass).unwrap();
         }
 
         // submit will accept anything that implements IntoIter
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
+
+        let _ = &self.atlas.trim();
+
+        // delete text buffers
+        self.text_buffers.clear();
 
         Ok(())
     }
@@ -647,110 +748,59 @@ impl<'a> State<'a> {
 
 }
 
-pub struct PlayerController {
+struct Player {
     position: Vector2<f32>,
-    is_up_pressed: bool,
-    is_down_pressed: bool,
-    is_left_pressed: bool,
-    is_right_pressed: bool,
-    pub is_space_pressed: bool,
 }
 
-impl PlayerController {
-    pub fn new() -> Self {
+impl Player {
+    pub fn new() -> Self
+    {
         Self {
             position: Vector2::<f32>::new(0.0, 0.0),
-            is_up_pressed: false,
-            is_down_pressed: false,
-            is_left_pressed: false,
-            is_right_pressed: false,
-            is_space_pressed: false,
         }
     }
-
-    pub fn process_events(&mut self, event: &WindowEvent) -> bool {
-        match event {
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        state,
-                        physical_key: PhysicalKey::Code(keycode),
-                        ..
-                    },
-                ..
-            } => {
-                let is_pressed = *state == ElementState::Pressed;
-                match keycode {
-                    KeyCode::KeyW | KeyCode::ArrowUp => {
-                        self.is_up_pressed = is_pressed;
-                        true
-                    }
-                    KeyCode::KeyA | KeyCode::ArrowLeft => {
-                        self.is_left_pressed = is_pressed;
-                        true
-                    }
-                    KeyCode::KeyS | KeyCode::ArrowDown => {
-                        self.is_down_pressed = is_pressed;
-                        true
-                    }
-                    KeyCode::KeyD | KeyCode::ArrowRight => {
-                        self.is_right_pressed = is_pressed;
-                        true
-                    }
-                    KeyCode::Space => {
-                        self.is_space_pressed = is_pressed;
-                        true
-                    }
-                    _ => false,
-                }
-            }
-            _ => false,
-        }
-    }
-
-    pub fn update_player(&mut self, delta_time: f32) {
-        const PLAYER_SPEED : f32 = 10.0;
+    pub fn update(&mut self, input : &InputStruct, delta_time: f32) {
+        const PLAYER_SPEED : f32 = 500.0;
 
         let mut velocity_x = 0.0;
         let mut velocity_y = 0.0;
 
-        if self.is_up_pressed {
-            velocity_y = -1.0;
-        }
-        if self.is_down_pressed {
+        if input.is_up_pressed {
             velocity_y = 1.0;
         }
+        if input.is_down_pressed {
+            velocity_y = -1.0;
+        }
 
-        if self.is_right_pressed {
+        if input.is_right_pressed {
             velocity_x = 1.0;
         }
-        if self.is_left_pressed {
-            velocity_y = -1.0;
+        if input.is_left_pressed {
+            velocity_x = -1.0;
         }
 
         let mut velocity = Vector2::<f32>::new(velocity_x, velocity_y);
 
         if !velocity.is_zero()
         {
-            velocity = velocity.normalize_to( PLAYER_SPEED * delta_time);
+            velocity = velocity.normalize();
+            velocity.x = velocity.x * PLAYER_SPEED * delta_time;
+            velocity.y = velocity.y * PLAYER_SPEED * delta_time;
         }
 
         self.position.x += velocity.x;
         self.position.y += velocity.y;
-
-        println!("Velocity: {0}, {1}", velocity.x, velocity.y);
-        println!("Position: {0}, {1}", self.position.x, self.position.y);
     }
 }
 
 fn game_logic(state: &mut State, delta_time: f32){
     // player controller
-    state.player_controller.update_player(delta_time);
+    state.player_struct.update(&state.input_struct, delta_time);
 }
 
 fn game_render(state: &mut State){
     // this will lag the first time this is called since we're loading it in for the first time
-    state.add_render_instance("src/happy-tree.png", state.player_controller.position.x, state.player_controller.position.y);
+    state.add_render_instance("src/happy-tree.png", state.player_struct.position.x, state.player_struct.position.y);
     state.add_render_instance_with_rotation("src/happy-tree-cartoon.png", 5.0, 5.0, 60.0);
     state.add_render_instance_with_scaling("src/happy-tree-cartoon.png", 8.0, 9.0, 2.0, 0.4);
     state.add_render_instance_with_rotation_and_scaling("src/happy-tree-cartoon.png", -5.0, 5.0, 32.0, 1.2, 2.2);
@@ -794,7 +844,7 @@ pub async fn run() {
     let mut surface_configured = false;
     let mut now = Instant::now();
 
-    let run_span = tracy_client::span!("begin actual run()");
+    let _run_span = tracy_client::span!("begin actual run()");
 
     event_loop
         .run(move |event, control_flow| {
@@ -831,7 +881,8 @@ pub async fn run() {
 
                                 // get delta time
                                 let delta_time = now.elapsed().as_secs_f32();
-                                //println!("FPS: {}", 1.0 / delta_time);
+                                state.set_text(&format!("FPS: {}", 1.0 / delta_time));
+                                state.set_text(&format!("Position: {0}, {1}", state.player_struct.position.x, state.player_struct.position.y));
 
                                 state.update();
 

@@ -18,6 +18,7 @@ bytemuck = { version = "1.16", features = ["derive"]}
 anyhow = "1.0"
 cgmath = "0.18"
 tracy-client = { version = "0.17.1", default-features = false, features = ["enable"] }
+glyphon = {git = "https://github.com/grovesNL/glyphon/", rev = "ce6ede951caf84569563ffdf1ef5a98aeae484e1"}
 
 [dependencies.image]
 version = "0.24"
