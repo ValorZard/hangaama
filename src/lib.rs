@@ -356,7 +356,7 @@ impl<'a> State<'a> {
         let camera = Camera {
             // position the camera 1 unit up and 2 units back
             // +z is out of the screen
-            eye: (0.0, 1.0, 2.0).into(),
+            eye: (0.0, 1.0, 15.0).into(),
             // have it look at the origin
             target: (0.0, 0.0, 0.0).into(),
             // which way is "up"
@@ -533,7 +533,7 @@ impl<'a> State<'a> {
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
-        self.camera_controller.process_events(event) && self.input_struct.process_events(event)
+        self.input_struct.process_events(event)
     }
 
     // image path has to be a string literal
@@ -760,7 +760,7 @@ impl Player {
         }
     }
     pub fn update(&mut self, input : &InputStruct, delta_time: f32) {
-        const PLAYER_SPEED : f32 = 100.0;
+        const PLAYER_SPEED : f32 = 500.0;
 
         let mut velocity_x = 0.0;
         let mut velocity_y = 0.0;
@@ -783,7 +783,9 @@ impl Player {
 
         if !velocity.is_zero()
         {
-            velocity = velocity.normalize_to( PLAYER_SPEED * delta_time);
+            velocity = velocity.normalize();
+            velocity.x = velocity.x * PLAYER_SPEED * delta_time;
+            velocity.y = velocity.y * PLAYER_SPEED * delta_time;
         }
 
         self.position.x += velocity.x;
