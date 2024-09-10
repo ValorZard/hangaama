@@ -585,6 +585,11 @@ impl<'a> State<'a> {
         self.asset_map.get_mut(image_path).unwrap().add_instance(x, y, rotation, scale_x, scale_y);
     }
 
+    fn set_text(&mut self, text : &str)
+    {
+        self.text_buffer.set_text(&mut self.font_system, text, Attrs::new().family(Family::SansSerif), Shaping::Advanced);
+    }
+
     fn update(&mut self) {
         let _span = tracy_client::span!("update game logic");
         // usually we should have a seperate buffer called a staging buffer
@@ -813,8 +818,8 @@ impl PlayerController {
         self.position.x += velocity.x;
         self.position.y += velocity.y;
 
-        println!("Velocity: {0}, {1}", velocity.x, velocity.y);
-        println!("Position: {0}, {1}", self.position.x, self.position.y);
+        //println!("Velocity: {0}, {1}", velocity.x, velocity.y);
+        //println!("Position: {0}, {1}", self.position.x, self.position.y);
     }
 }
 
@@ -906,7 +911,7 @@ pub async fn run() {
 
                                 // get delta time
                                 let delta_time = now.elapsed().as_secs_f32();
-                                //println!("FPS: {}", 1.0 / delta_time);
+                                state.set_text(format!("FPS: {}", 1.0 / delta_time).as_str());
 
                                 state.update();
 
