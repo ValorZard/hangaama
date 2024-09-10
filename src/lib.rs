@@ -634,20 +634,24 @@ impl<'a> State<'a> {
 
         let mut text_areas = Vec::<TextArea>::new();
         
+        let mut spacing = 0;
+
         for buffer in &self.text_buffers {
             text_areas.push(TextArea {
                 buffer,
                 left: 10.0,
-                top: 10.0,
+                top: 10.0 + (spacing as f32),
                 scale: 1.0,
                 bounds: TextBounds {
                     left: 0,
                     top: 0,
                     right: 300,
-                    bottom: 50,
+                    bottom: 50 + spacing,
                 },
                 default_color: Color::rgb(255, 255, 255),
             });
+            // add spacing
+            spacing += 50;
         }
 
         self.text_renderer
@@ -832,9 +836,6 @@ impl PlayerController {
 
         self.position.x += velocity.x;
         self.position.y += velocity.y;
-
-        //println!("Velocity: {0}, {1}", velocity.x, velocity.y);
-        //println!("Position: {0}, {1}", self.position.x, self.position.y);
     }
 }
 
@@ -926,8 +927,9 @@ pub async fn run() {
 
                                 // get delta time
                                 let delta_time = now.elapsed().as_secs_f32();
-                                state.set_text(format!("FPS: {}", 1.0 / delta_time).as_str());
-
+                                state.set_text(&format!("FPS: {}", 1.0 / delta_time));
+                                state.set_text(&format!("Position: {0}, {1}", state.player_controller.position.x, state.player_controller.position.y));
+                                
                                 state.update();
 
                                 game_logic(&mut state, delta_time);
