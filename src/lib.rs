@@ -707,6 +707,8 @@ impl<'a> State<'a> {
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
+        &self.atlas.trim();
+
         Ok(())
     }
 
