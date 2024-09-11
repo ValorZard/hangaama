@@ -747,12 +747,22 @@ impl<'a> State<'a> {
 
 }
 
+const PLAYER_SPEED : f32 = 500.0;
 struct Player {
     position: Vector2<f32>,
 }
 
+const SPAWN_TIME : f32 = 10.;
+const SPIKE_SPEED : f32 = 10.;
+
+struct Spike {
+    position: Vector2<f32>,
+}
+
 struct LogicState {
-    player: Player
+    player: Player,
+    spikes: Vec<Spike>,
+    spawn_timer: f32,
 }
 
 impl LogicState {
@@ -761,11 +771,13 @@ impl LogicState {
         Self {
             player: Player {
                 position: Vector2::<f32>::new(0.0, 0.0),
-            }
+            },
+            spikes: Vec::<Spike>::new(),
+            spawn_timer: SPAWN_TIME,
         }
     }
     pub fn update(&mut self, input : &InputStruct, delta_time: f32) {
-        const PLAYER_SPEED : f32 = 500.0;
+        self.spawn_timer += delta_time;
 
         let mut velocity_x = 0.0;
         let mut velocity_y = 0.0;
@@ -795,6 +807,17 @@ impl LogicState {
 
         self.player.position.x += velocity.x;
         self.player.position.y += velocity.y;
+
+        if self.spawn_timer >= SPAWN_TIME {
+            self.spikes.push(Spike { position : Vector2::<f32>::new(10., 0.)});
+            self.spawn_timer = 0.;
+        }
+
+        if !self.spikes.is_empty() {
+            self.spikes[0].position.x -= SPIKE_SPEED * delta_time;
+        }
+
+
     }
 }
 
@@ -806,7 +829,10 @@ fn game_logic(input: &InputStruct, logic: &mut LogicState, delta_time: f32){
 fn game_render(state: &mut State, logic: &mut LogicState){
     // this will lag the first time this is called since we're loading it in for the first time
     state.add_render_instance("src/happy-tree.png", logic.player.position.x, logic.player.position.y);
-    state.add_render_instance_with_rotation("src/happy-tree-cartoon.png", 5.0, 5.0, 60.0);
+    if !logic.spikes.is_empty()
+    {
+        state.add_render_instance_with_rotation("src/happy-tree-cartoon.png", logic.spikes[0].position.x, logic.spikes[0].position.y, 60.);
+    }
     state.add_render_instance_with_scaling("src/happy-tree-cartoon.png", 8.0, 9.0, 2.0, 0.4);
     state.add_render_instance_with_rotation_and_scaling("src/happy-tree-cartoon.png", -5.0, 5.0, 32.0, 1.2, 2.2);
 }
@@ -889,7 +915,7 @@ pub async fn run() {
                                 let delta_time = now.elapsed().as_secs_f32();
                                 state.set_text(&format!("FPS: {}", 1.0 / delta_time));
                                 state.set_text(&format!("Position: {0}, {1}", logic.player.position.x, logic.player.position.y));
-
+                                state.set_text(&format!("Spikes: {0}", logic.spikes.len()));
                                 state.update();
 
                                 game_logic(&state.input_struct, &mut logic, delta_time);
