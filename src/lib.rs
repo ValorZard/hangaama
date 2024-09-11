@@ -4,6 +4,7 @@ use glyphon::{
     Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache,
     TextArea, TextAtlas, TextBounds, TextRenderer, Viewport,
 };
+use log::Log;
 use crate::sprite::*;
 mod camera;
 use camera::*;
@@ -233,7 +234,6 @@ struct State<'a> {
     camera_bind_group: wgpu::BindGroup,
     camera_controller: CameraController,
     input_struct: InputStruct,
-    player_struct: Player,
     // text stuff
     font_system: FontSystem,
     swash_cache: SwashCache,
@@ -509,7 +509,6 @@ impl<'a> State<'a> {
             camera_bind_group,
             camera_controller,
             input_struct: InputStruct::new(),
-            player_struct : Player::new(),
             font_system,
             swash_cache,
             viewport,
@@ -647,7 +646,7 @@ impl<'a> State<'a> {
                 bounds: TextBounds {
                     left: 0,
                     top: 0,
-                    right: 300,
+                    right: 600,
                     bottom: 50 + spacing,
                 },
                 default_color: Color::rgb(255, 255, 255),
@@ -752,11 +751,17 @@ struct Player {
     position: Vector2<f32>,
 }
 
-impl Player {
+struct LogicState {
+    player: Player
+}
+
+impl LogicState {
     pub fn new() -> Self
     {
         Self {
-            position: Vector2::<f32>::new(0.0, 0.0),
+            player: Player {
+                position: Vector2::<f32>::new(0.0, 0.0),
+            }
         }
     }
     pub fn update(&mut self, input : &InputStruct, delta_time: f32) {
@@ -788,19 +793,19 @@ impl Player {
             velocity.y = velocity.y * PLAYER_SPEED * delta_time;
         }
 
-        self.position.x += velocity.x;
-        self.position.y += velocity.y;
+        self.player.position.x += velocity.x;
+        self.player.position.y += velocity.y;
     }
 }
 
-fn game_logic(state: &mut State, delta_time: f32){
+fn game_logic(input: &InputStruct, logic: &mut LogicState, delta_time: f32){
     // player controller
-    state.player_struct.update(&state.input_struct, delta_time);
+    logic.update(input, delta_time);
 }
 
-fn game_render(state: &mut State){
+fn game_render(state: &mut State, logic: &mut LogicState){
     // this will lag the first time this is called since we're loading it in for the first time
-    state.add_render_instance("src/happy-tree.png", state.player_struct.position.x, state.player_struct.position.y);
+    state.add_render_instance("src/happy-tree.png", logic.player.position.x, logic.player.position.y);
     state.add_render_instance_with_rotation("src/happy-tree-cartoon.png", 5.0, 5.0, 60.0);
     state.add_render_instance_with_scaling("src/happy-tree-cartoon.png", 8.0, 9.0, 2.0, 0.4);
     state.add_render_instance_with_rotation_and_scaling("src/happy-tree-cartoon.png", -5.0, 5.0, 32.0, 1.2, 2.2);
@@ -841,6 +846,7 @@ pub async fn run() {
     }
 
     let mut state = State::new(&window).await;
+    let mut logic = LogicState::new();
     let mut surface_configured = false;
     let mut now = Instant::now();
 
@@ -882,15 +888,15 @@ pub async fn run() {
                                 // get delta time
                                 let delta_time = now.elapsed().as_secs_f32();
                                 state.set_text(&format!("FPS: {}", 1.0 / delta_time));
-                                state.set_text(&format!("Position: {0}, {1}", state.player_struct.position.x, state.player_struct.position.y));
+                                state.set_text(&format!("Position: {0}, {1}", logic.player.position.x, logic.player.position.y));
 
                                 state.update();
 
-                                game_logic(&mut state, delta_time);
+                                game_logic(&state.input_struct, &mut logic, delta_time);
                                 
                                 let _span2 = tracy_client::span!("start render");
                                 
-                                game_render(&mut state);
+                                game_render(&mut state, &mut logic);
                                 
                                 // render
                                 match state.render() {
