@@ -213,7 +213,7 @@ impl RenderBlock {
     }
 }
 
-struct State<'a> {
+struct RenderState<'a> {
     surface: wgpu::Surface<'a>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -247,9 +247,9 @@ struct State<'a> {
     window: &'a Window,
 }
 
-impl<'a> State<'a> {
+impl<'a> RenderState<'a> {
     // need some async code to create some of the wgpu types
-    async fn new(window: &'a Window) -> State<'a> {
+    async fn new(window: &'a Window) -> RenderState<'a> {
         let size = window.inner_size();
         // instance is a handle to our GPU
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -826,7 +826,7 @@ fn game_logic(input: &InputStruct, logic: &mut LogicState, delta_time: f32){
     logic.update(input, delta_time);
 }
 
-fn game_render(state: &mut State, logic: &mut LogicState){
+fn game_render(state: &mut RenderState, logic: &mut LogicState){
     // this will lag the first time this is called since we're loading it in for the first time
     state.add_render_instance("src/happy-tree.png", logic.player.position.x, logic.player.position.y);
     if !logic.spikes.is_empty()
@@ -871,7 +871,7 @@ pub async fn run() {
             .expect("Couldn't append canvas to document body.");
     }
 
-    let mut state = State::new(&window).await;
+    let mut state = RenderState::new(&window).await;
     let mut logic = LogicState::new();
     let mut surface_configured = false;
     let mut now = Instant::now();
