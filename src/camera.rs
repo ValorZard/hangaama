@@ -25,9 +25,9 @@ impl Camera {
         // view matrix -> moves the world to be at the position and rotation of the camera
         // (to render shit)
         let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
-        // warps scene to give effect of depth
-        let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);
-        return OPENGL_TO_WGPU_MATRIX * proj * view;
+        // since this is a 2d engine, use orthographic view
+        let ortho: cgmath::Matrix4<f32> = cgmath::ortho(-1., 1., -1., 1., -1., 1.);
+        return OPENGL_TO_WGPU_MATRIX * ortho * view;
     }
 }
 
