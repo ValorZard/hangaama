@@ -709,7 +709,7 @@ struct Player {
 
 const SPAWN_TIME : f32 = 0.1;
 const SPIKE_SPEED : f32 = 100.;
-const SPIKE_LIFETIME : f32 = 1.;
+const SPIKE_LIFETIME : f32 = 0.3;
 
 struct Spike {
     position: Vector2<f32>,
