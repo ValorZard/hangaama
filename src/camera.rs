@@ -26,7 +26,8 @@ impl Camera {
         // (to render shit)
         let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
         // since this is a 2d engine, use orthographic view
-        let ortho: cgmath::Matrix4<f32> = cgmath::ortho(-1., 1., -1., 1., -1., 1.);
+        const SCALE_FACTOR: f32 = 10.;
+        let ortho: cgmath::Matrix4<f32> = cgmath::ortho(-1. * SCALE_FACTOR, 1. * SCALE_FACTOR, -1. * SCALE_FACTOR, 1. * SCALE_FACTOR, -1., 1.);
         return OPENGL_TO_WGPU_MATRIX * ortho * view;
     }
 }

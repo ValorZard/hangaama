@@ -784,7 +784,7 @@ fn game_render(state: &mut RenderState, logic: &mut LogicState){
     state.add_render_instance_with_scaling("src/yellowbird-downflap.png", logic.player.position.x, logic.player.position.y, 1., 1.);
     if !logic.spikes.is_empty()
     {
-        state.add_render_instance_with_rotation("src/happy-tree-cartoon.png", logic.spikes[0].position.x, logic.spikes[0].position.y, 60.);
+        state.add_render_instance("src/pipe-green.png", logic.spikes[0].position.x, logic.spikes[0].position.y);
     }
     state.add_render_instance_with_scaling("src/happy-tree-cartoon.png", 8.0, 9.0, 2.0, 0.4);
     state.add_render_instance_with_rotation_and_scaling("src/happy-tree-cartoon.png", -5.0, 5.0, 32.0, 1.2, 2.2);
