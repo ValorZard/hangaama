@@ -701,7 +701,8 @@ impl<'a> RenderState<'a> {
 
 }
 
-const PLAYER_SPEED : f32 = 50.0;
+const PLAYER_SPEED : f32 = 200.0;
+const GRAVITY : f32 = -200.0;
 struct Player {
     position: Vector2<f32>,
 }
@@ -738,33 +739,26 @@ impl LogicState {
     pub fn update(&mut self, input : &InputStruct, delta_time: f32) {
 
         let mut velocity_x = 0.0;
-        let mut velocity_y = 0.0;
+        let mut velocity_y = GRAVITY * delta_time;
 
-        if input.is_up_pressed {
-            velocity_y = 1.0;
-        }
-        if input.is_down_pressed {
-            velocity_y = -1.0;
+        if input.is_space_pressed {
+            velocity_y = PLAYER_SPEED  * delta_time;
         }
 
-        if input.is_right_pressed {
-            velocity_x = 1.0;
-        }
-        if input.is_left_pressed {
-            velocity_x = -1.0;
-        }
 
-        let mut velocity = Vector2::<f32>::new(velocity_x, velocity_y);
+        self.player.position.x += velocity_x;
+        self.player.position.y += velocity_y;
 
-        if !velocity.is_zero()
-        {
-            velocity = velocity.normalize();
-            velocity.x = velocity.x * PLAYER_SPEED * delta_time;
-            velocity.y = velocity.y * PLAYER_SPEED * delta_time;
+        self.player.position.y = if self.player.position.y > 15. {
+            15.
+        } else if self.player.position.y < -15. {
+            -15.
         }
+        else {
+            self.player.position.y
+        };
 
-        self.player.position.x += velocity.x;
-        self.player.position.y += velocity.y;
+        // spike/pipe stuff
 
         self.spawn_timer += delta_time;
 
