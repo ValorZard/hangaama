@@ -60,31 +60,6 @@ impl Vertex {
     }
 }
 
-// store all UNIQUE vertices
-// this saves a lot of memory compared to storing every single vertex
-const VERTICES: &[Vertex] = &[
-    // Changed
-    Vertex {
-        position: [1.0, 1.0, 0.0],
-        tex_coords: [1.0, 0.0],
-    }, // A
-    Vertex {
-        position: [-1.0, 1.0, 0.0],
-        tex_coords: [0.0, 0.0],
-    }, // B
-    Vertex {
-        position: [-1.0, -1.0, 0.0],
-        tex_coords: [0.0, 1.0],
-    }, // C
-    Vertex {
-        position: [1.0, -1.0, 0.0],
-        tex_coords: [1.0, 1.0],
-    },
-];
-
-// we can reuse vertices to create the triangles
-const INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
-
 struct Instance {
     position: cgmath::Vector3<f32>,
     rotation: cgmath::Quaternion<f32>,
@@ -220,14 +195,9 @@ struct RenderState<'a> {
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
     render_pipeline: wgpu::RenderPipeline,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    num_indices: u32,
     texture_bind_group_layout: wgpu::BindGroupLayout,
     // each render block is tied to the string path of where the asset is from
     asset_map: std::collections::HashMap<&'static str, RenderBlock>,
-    // input shit
-    is_space_pressed: bool,
     camera: Camera,
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
@@ -464,19 +434,6 @@ impl<'a> RenderState<'a> {
             cache: None,
         });
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-        let num_indices = INDICES.len() as u32;
-
         
         // Set up text renderer
         let font_system = FontSystem::new();
@@ -497,12 +454,8 @@ impl<'a> RenderState<'a> {
             config,
             size,
             render_pipeline,
-            vertex_buffer,
-            index_buffer,
-            num_indices,
             texture_bind_group_layout,
             asset_map: HashMap::new(),
-            is_space_pressed: false,
             camera,
             camera_uniform,
             camera_buffer,
@@ -708,16 +661,16 @@ impl<'a> RenderState<'a> {
                 // set camera bind group
                 render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
                 // have to set vertex buffer in render method, else everything will crash
-                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                render_pass.set_vertex_buffer(0, render_block.sprite.vertex_buffer.slice(..));
                 render_pass.set_vertex_buffer(1, render_block.get_instance_buffer(&self.device).slice(..));
                 // we can have only one index buffer at a time
                 render_pass.set_index_buffer(
-                    self.index_buffer.slice(..),
+                    render_block.sprite.index_buffer.slice(..),
                     wgpu::IndexFormat::Uint16,
                 );
                 // we're using draw_indexed not draw(), since draw ignores index buffer.
                 render_pass.draw_indexed(
-                    0..self.num_indices,
+                    0..render_block.sprite.num_indices,
                     0,
                     0..render_block.instances.len() as _,
                 );

@@ -1,8 +1,15 @@
+use wgpu::util::DeviceExt;
+
+use crate::Vertex;
+
 pub mod texture;
 
 pub struct Sprite {
     texture: texture::Texture,
     pub bind_group: wgpu::BindGroup,
+    pub vertex_buffer: wgpu::Buffer,
+    pub index_buffer: wgpu::Buffer,
+    pub num_indices: u32,
 }
 
 impl Sprite {
@@ -33,9 +40,53 @@ impl Sprite {
             label: Some("diffuse_bind_group"),
         });
 
+        // TODO: convert textures to texture scale with regards to size of screen
+
+        // store all UNIQUE vertices
+        // this saves a lot of memory compared to storing every single vertex
+        const VERTICES: &[Vertex] = &[
+            // Changed
+            Vertex {
+                position: [1.0, 1.0, 0.0],
+                tex_coords: [1.0, 0.0],
+            }, // A
+            Vertex {
+                position: [-1.0, 1.0, 0.0],
+                tex_coords: [0.0, 0.0],
+            }, // B
+            Vertex {
+                position: [-1.0, -1.0, 0.0],
+                tex_coords: [0.0, 1.0],
+            }, // C
+            Vertex {
+                position: [1.0, -1.0, 0.0],
+                tex_coords: [1.0, 1.0],
+            },
+        ];
+
+        // we can reuse vertices to create the triangles
+        const INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
+
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(VERTICES),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(INDICES),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        let num_indices = INDICES.len() as u32;
+
         Sprite {
             texture,
             bind_group,
+            vertex_buffer,
+            index_buffer,
+            num_indices,
         }
     }
 }
