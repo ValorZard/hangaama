@@ -29,6 +29,7 @@ impl Texture {
         let _span = tracy_client::span!("Texture::from_image()");
         let rgba = img.to_rgba8();
         let dimensions = img.dimensions();
+        println!("{0}, {1}", dimensions.0, dimensions.1);
 
         let size = wgpu::Extent3d {
             width: dimensions.0,

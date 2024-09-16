@@ -828,7 +828,7 @@ fn game_logic(input: &InputStruct, logic: &mut LogicState, delta_time: f32){
 
 fn game_render(state: &mut RenderState, logic: &mut LogicState){
     // this will lag the first time this is called since we're loading it in for the first time
-    state.add_render_instance_with_scaling("src/happy-tree.png", logic.player.position.x, logic.player.position.y, 0.1, 0.1);
+    state.add_render_instance_with_scaling("src/yellowbird-downflap.png", logic.player.position.x, logic.player.position.y, 1., 1.);
     if !logic.spikes.is_empty()
     {
         state.add_render_instance_with_rotation("src/happy-tree-cartoon.png", logic.spikes[0].position.x, logic.spikes[0].position.y, 60.);
