@@ -6,6 +6,8 @@ pub struct Texture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
+    pub width: u32,
+    pub height: u32,
 }
 
 impl Texture {
@@ -29,10 +31,14 @@ impl Texture {
         let _span = tracy_client::span!("Texture::from_image()");
         let rgba = img.to_rgba8();
         let dimensions = img.dimensions();
+        println!("{0}, {1}", dimensions.0, dimensions.1);
+
+        let width = dimensions.0;
+        let height = dimensions.1;
 
         let size = wgpu::Extent3d {
-            width: dimensions.0,
-            height: dimensions.1,
+            width,
+            height,
             depth_or_array_layers: 1,
         };
 
@@ -84,6 +90,8 @@ impl Texture {
             texture,
             view,
             sampler,
+            width,
+            height,
         })
     }
 }

@@ -17,6 +17,7 @@ use winit::{
     window::Window,
     window::WindowBuilder,
 };
+use rand::prelude::*;
 
 // need to import this to use create_buffer_init
 use cgmath::{prelude::*, Vector2};
@@ -59,31 +60,6 @@ impl Vertex {
         }
     }
 }
-
-// store all UNIQUE vertices
-// this saves a lot of memory compared to storing every single vertex
-const VERTICES: &[Vertex] = &[
-    // Changed
-    Vertex {
-        position: [1.0, 1.0, 0.0],
-        tex_coords: [1.0, 0.0],
-    }, // A
-    Vertex {
-        position: [-1.0, 1.0, 0.0],
-        tex_coords: [0.0, 0.0],
-    }, // B
-    Vertex {
-        position: [-1.0, -1.0, 0.0],
-        tex_coords: [0.0, 1.0],
-    }, // C
-    Vertex {
-        position: [1.0, -1.0, 0.0],
-        tex_coords: [1.0, 1.0],
-    },
-];
-
-// we can reuse vertices to create the triangles
-const INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
 
 struct Instance {
     position: cgmath::Vector3<f32>,
@@ -220,14 +196,9 @@ struct RenderState<'a> {
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
     render_pipeline: wgpu::RenderPipeline,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    num_indices: u32,
     texture_bind_group_layout: wgpu::BindGroupLayout,
     // each render block is tied to the string path of where the asset is from
     asset_map: std::collections::HashMap<&'static str, RenderBlock>,
-    // input shit
-    is_space_pressed: bool,
     camera: Camera,
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
@@ -356,7 +327,7 @@ impl<'a> RenderState<'a> {
         let camera = Camera {
             // position the camera 1 unit up and 2 units back
             // +z is out of the screen
-            eye: (0.0, 1.0, 15.0).into(),
+            eye: (0.0, 0.0, 1.0).into(),
             // have it look at the origin
             target: (0.0, 0.0, 0.0).into(),
             // which way is "up"
@@ -464,19 +435,6 @@ impl<'a> RenderState<'a> {
             cache: None,
         });
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-        let num_indices = INDICES.len() as u32;
-
         
         // Set up text renderer
         let font_system = FontSystem::new();
@@ -497,12 +455,8 @@ impl<'a> RenderState<'a> {
             config,
             size,
             render_pipeline,
-            vertex_buffer,
-            index_buffer,
-            num_indices,
             texture_bind_group_layout,
             asset_map: HashMap::new(),
-            is_space_pressed: false,
             camera,
             camera_uniform,
             camera_buffer,
@@ -708,16 +662,16 @@ impl<'a> RenderState<'a> {
                 // set camera bind group
                 render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
                 // have to set vertex buffer in render method, else everything will crash
-                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                render_pass.set_vertex_buffer(0, render_block.sprite.vertex_buffer.slice(..));
                 render_pass.set_vertex_buffer(1, render_block.get_instance_buffer(&self.device).slice(..));
                 // we can have only one index buffer at a time
                 render_pass.set_index_buffer(
-                    self.index_buffer.slice(..),
+                    render_block.sprite.index_buffer.slice(..),
                     wgpu::IndexFormat::Uint16,
                 );
                 // we're using draw_indexed not draw(), since draw ignores index buffer.
                 render_pass.draw_indexed(
-                    0..self.num_indices,
+                    0..render_block.sprite.num_indices,
                     0,
                     0..render_block.instances.len() as _,
                 );
@@ -747,22 +701,27 @@ impl<'a> RenderState<'a> {
 
 }
 
-const PLAYER_SPEED : f32 = 500.0;
+const PLAYER_SPEED : f32 = 200.0;
+const GRAVITY : f32 = -200.0;
 struct Player {
     position: Vector2<f32>,
 }
 
-const SPAWN_TIME : f32 = 10.;
-const SPIKE_SPEED : f32 = 10.;
+const SPAWN_TIME : f32 = 0.1;
+const SPIKE_SPEED : f32 = 100.;
+const SPIKE_LIFETIME : f32 = 0.3;
 
 struct Spike {
     position: Vector2<f32>,
+    facing_up: bool,
+    lifetime: f32,
 }
 
 struct LogicState {
     player: Player,
     spikes: Vec<Spike>,
     spawn_timer: f32,
+    rng: ThreadRng,
 }
 
 impl LogicState {
@@ -773,50 +732,49 @@ impl LogicState {
                 position: Vector2::<f32>::new(0.0, 0.0),
             },
             spikes: Vec::<Spike>::new(),
-            spawn_timer: SPAWN_TIME,
+            spawn_timer: 0.,
+            rng: rand::thread_rng(),
         }
     }
     pub fn update(&mut self, input : &InputStruct, delta_time: f32) {
-        self.spawn_timer += delta_time;
 
         let mut velocity_x = 0.0;
-        let mut velocity_y = 0.0;
+        let mut velocity_y = GRAVITY * delta_time;
 
-        if input.is_up_pressed {
-            velocity_y = 1.0;
-        }
-        if input.is_down_pressed {
-            velocity_y = -1.0;
+        if input.is_space_pressed {
+            velocity_y = PLAYER_SPEED  * delta_time;
         }
 
-        if input.is_right_pressed {
-            velocity_x = 1.0;
+
+        self.player.position.x += velocity_x;
+        self.player.position.y += velocity_y;
+
+        self.player.position.y = if self.player.position.y > 15. {
+            15.
+        } else if self.player.position.y < -15. {
+            -15.
         }
-        if input.is_left_pressed {
-            velocity_x = -1.0;
-        }
+        else {
+            self.player.position.y
+        };
 
-        let mut velocity = Vector2::<f32>::new(velocity_x, velocity_y);
+        // spike/pipe stuff
 
-        if !velocity.is_zero()
-        {
-            velocity = velocity.normalize();
-            velocity.x = velocity.x * PLAYER_SPEED * delta_time;
-            velocity.y = velocity.y * PLAYER_SPEED * delta_time;
-        }
+        self.spawn_timer += delta_time;
 
-        self.player.position.x += velocity.x;
-        self.player.position.y += velocity.y;
-
-        if self.spawn_timer >= SPAWN_TIME {
-            self.spikes.push(Spike { position : Vector2::<f32>::new(10., 0.)});
+        if self.spawn_timer > SPAWN_TIME {
+            let offset = self.rng.gen_range(-10.0..=10.0);
+            self.spikes.push(Spike { position : Vector2::<f32>::new(10., -15. + offset), facing_up: true, lifetime: SPIKE_LIFETIME});
+            self.spikes.push(Spike { position : Vector2::<f32>::new(10., 15. + offset), facing_up: false, lifetime: SPIKE_LIFETIME});
             self.spawn_timer = 0.;
         }
 
-        if !self.spikes.is_empty() {
-            self.spikes[0].position.x -= SPIKE_SPEED * delta_time;
+        for spike in &mut self.spikes {
+            spike.position.x -= SPIKE_SPEED * delta_time;
+            spike.lifetime -= delta_time;
         }
-
+        
+        self.spikes.retain(|spike| spike.lifetime > 0.);
 
     }
 }
@@ -828,10 +786,10 @@ fn game_logic(input: &InputStruct, logic: &mut LogicState, delta_time: f32){
 
 fn game_render(state: &mut RenderState, logic: &mut LogicState){
     // this will lag the first time this is called since we're loading it in for the first time
-    state.add_render_instance("src/happy-tree.png", logic.player.position.x, logic.player.position.y);
-    if !logic.spikes.is_empty()
+    state.add_render_instance_with_scaling("src/yellowbird-downflap.png", logic.player.position.x, logic.player.position.y, 10., 10.);
+    for spike in &logic.spikes
     {
-        state.add_render_instance_with_rotation("src/happy-tree-cartoon.png", logic.spikes[0].position.x, logic.spikes[0].position.y, 60.);
+        state.add_render_instance_with_rotation_and_scaling("src/pipe-green.png", spike.position.x, spike.position.y, if spike.facing_up {0.} else {180.}, 5., 8.);
     }
     state.add_render_instance_with_scaling("src/happy-tree-cartoon.png", 8.0, 9.0, 2.0, 0.4);
     state.add_render_instance_with_rotation_and_scaling("src/happy-tree-cartoon.png", -5.0, 5.0, 32.0, 1.2, 2.2);
