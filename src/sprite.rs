@@ -40,26 +40,32 @@ impl Sprite {
             label: Some("diffuse_bind_group"),
         });
 
-        // TODO: convert textures to texture scale with regards to size of screen
+        // convert textures to texture scale with regards to size of screen
+
+        // TODO: Unhardcode this
+        let SCALE_FACTOR : f32 = 100.;
+
+        let screen_width : f32 = texture.width as f32 / SCALE_FACTOR;
+        let screen_height : f32 = texture.height as f32 / SCALE_FACTOR;
 
         // store all UNIQUE vertices
         // this saves a lot of memory compared to storing every single vertex
-        const VERTICES: &[Vertex] = &[
+        let VERTICES: &[Vertex] = &[
             // Changed
             Vertex {
-                position: [1.0, 1.0, 0.0],
+                position: [screen_width / 2., screen_height / 2., 0.0],
                 tex_coords: [1.0, 0.0],
             }, // A
             Vertex {
-                position: [-1.0, 1.0, 0.0],
+                position: [-screen_width / 2., screen_height / 2., 0.0],
                 tex_coords: [0.0, 0.0],
             }, // B
             Vertex {
-                position: [-1.0, -1.0, 0.0],
+                position: [-screen_width / 2., -screen_height / 2., 0.0],
                 tex_coords: [0.0, 1.0],
             }, // C
             Vertex {
-                position: [1.0, -1.0, 0.0],
+                position: [screen_width / 2., -screen_height / 2., 0.0],
                 tex_coords: [1.0, 1.0],
             },
         ];
