@@ -17,6 +17,7 @@ use winit::{
     window::Window,
     window::WindowBuilder,
 };
+use rand::prelude::*;
 
 // need to import this to use create_buffer_init
 use cgmath::{prelude::*, Vector2};
@@ -707,16 +708,19 @@ struct Player {
 
 const SPAWN_TIME : f32 = 0.1;
 const SPIKE_SPEED : f32 = 100.;
+const SPIKE_LIFETIME : f32 = 1.;
 
 struct Spike {
     position: Vector2<f32>,
     facing_up: bool,
+    lifetime: f32,
 }
 
 struct LogicState {
     player: Player,
     spikes: Vec<Spike>,
     spawn_timer: f32,
+    rng: ThreadRng,
 }
 
 impl LogicState {
@@ -728,6 +732,7 @@ impl LogicState {
             },
             spikes: Vec::<Spike>::new(),
             spawn_timer: 0.,
+            rng: rand::thread_rng(),
         }
     }
     pub fn update(&mut self, input : &InputStruct, delta_time: f32) {
@@ -764,15 +769,18 @@ impl LogicState {
         self.spawn_timer += delta_time;
 
         if self.spawn_timer > SPAWN_TIME {
-            self.spikes.push(Spike { position : Vector2::<f32>::new(10., -10.), facing_up: true});
-            self.spikes.push(Spike { position : Vector2::<f32>::new(10., 10.), facing_up: false});
+            let offset = self.rng.gen_range(-10.0..=10.0);
+            self.spikes.push(Spike { position : Vector2::<f32>::new(10., -15. + offset), facing_up: true, lifetime: SPIKE_LIFETIME});
+            self.spikes.push(Spike { position : Vector2::<f32>::new(10., 15. + offset), facing_up: false, lifetime: SPIKE_LIFETIME});
             self.spawn_timer = 0.;
         }
 
         for spike in &mut self.spikes {
             spike.position.x -= SPIKE_SPEED * delta_time;
+            spike.lifetime -= delta_time;
         }
-
+        
+        self.spikes.retain(|spike| spike.lifetime > 0.);
 
     }
 }
@@ -787,7 +795,7 @@ fn game_render(state: &mut RenderState, logic: &mut LogicState){
     state.add_render_instance_with_scaling("src/yellowbird-downflap.png", logic.player.position.x, logic.player.position.y, 10., 10.);
     for spike in &logic.spikes
     {
-        state.add_render_instance_with_rotation_and_scaling("src/pipe-green.png", spike.position.x, spike.position.y, if spike.facing_up {0.} else {180.}, 5., 5.);
+        state.add_render_instance_with_rotation_and_scaling("src/pipe-green.png", spike.position.x, spike.position.y, if spike.facing_up {0.} else {180.}, 5., 8.);
     }
     state.add_render_instance_with_scaling("src/happy-tree-cartoon.png", 8.0, 9.0, 2.0, 0.4);
     state.add_render_instance_with_rotation_and_scaling("src/happy-tree-cartoon.png", -5.0, 5.0, 32.0, 1.2, 2.2);
