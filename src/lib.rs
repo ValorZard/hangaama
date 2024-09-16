@@ -705,8 +705,8 @@ struct Player {
     position: Vector2<f32>,
 }
 
-const SPAWN_TIME : f32 = 10.;
-const SPIKE_SPEED : f32 = 10.;
+const SPAWN_TIME : f32 = 0.1;
+const SPIKE_SPEED : f32 = 100.;
 
 struct Spike {
     position: Vector2<f32>,
@@ -726,11 +726,10 @@ impl LogicState {
                 position: Vector2::<f32>::new(0.0, 0.0),
             },
             spikes: Vec::<Spike>::new(),
-            spawn_timer: SPAWN_TIME,
+            spawn_timer: 0.,
         }
     }
     pub fn update(&mut self, input : &InputStruct, delta_time: f32) {
-        self.spawn_timer += delta_time;
 
         let mut velocity_x = 0.0;
         let mut velocity_y = 0.0;
@@ -761,13 +760,15 @@ impl LogicState {
         self.player.position.x += velocity.x;
         self.player.position.y += velocity.y;
 
-        if self.spawn_timer >= SPAWN_TIME {
+        self.spawn_timer += delta_time;
+
+        if self.spawn_timer > SPAWN_TIME {
             self.spikes.push(Spike { position : Vector2::<f32>::new(10., 0.)});
             self.spawn_timer = 0.;
         }
 
-        if !self.spikes.is_empty() {
-            self.spikes[0].position.x -= SPIKE_SPEED * delta_time;
+        for spike in &mut self.spikes {
+            spike.position.x -= SPIKE_SPEED * delta_time;
         }
 
 
@@ -781,10 +782,10 @@ fn game_logic(input: &InputStruct, logic: &mut LogicState, delta_time: f32){
 
 fn game_render(state: &mut RenderState, logic: &mut LogicState){
     // this will lag the first time this is called since we're loading it in for the first time
-    state.add_render_instance_with_scaling("src/yellowbird-downflap.png", logic.player.position.x, logic.player.position.y, 1., 1.);
-    if !logic.spikes.is_empty()
+    state.add_render_instance_with_scaling("src/yellowbird-downflap.png", logic.player.position.x, logic.player.position.y, 10., 10.);
+    for spike in &logic.spikes
     {
-        state.add_render_instance("src/pipe-green.png", logic.spikes[0].position.x, logic.spikes[0].position.y);
+        state.add_render_instance_with_scaling("src/pipe-green.png", spike.position.x, spike.position.y, 5., 5.);
     }
     state.add_render_instance_with_scaling("src/happy-tree-cartoon.png", 8.0, 9.0, 2.0, 0.4);
     state.add_render_instance_with_rotation_and_scaling("src/happy-tree-cartoon.png", -5.0, 5.0, 32.0, 1.2, 2.2);
